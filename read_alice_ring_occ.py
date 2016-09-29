@@ -157,8 +157,15 @@ fs           	= 15		# Font size
 plt.rc('image', interpolation='None')       # Turn of interpolation for imshow. Could also do hbt.set_plot_defaults()
 #nu.reset_units()
 
-dir_images = '/Users/throop/Data/NH_Alice_Ring/' + sequence + '/data/pluto/level2/ali/all'
-file_tm = '/Users/throop/gv/dev/kernels/15sci_rhr_25aug16.tm' # Def need to use an encounter kernel here.
+DO_HICAD = True # Use this for the OC2 data
+
+if not DO_HICAD:
+    dir_images = '/Users/throop/Data/NH_Alice_Ring/' + sequence + '/data/pluto/level2/ali/all'
+
+if (sequence == 'O_RING_OC2') and (DO_HICAD):
+    dir_images = '/Users/throop/Data/NH_Alice_Ring/O_RING_OC2/data/pluto/level2/ali_hicad'
+    
+file_tm    = '/Users/throop/gv/dev/kernels/15sci_rhr_25aug16.tm' # Def need to use an encounter kernel here.
 
 cspice.furnsh(file_tm)
 
@@ -167,6 +174,9 @@ cspice.furnsh(file_tm)
 #########
 
 file_list = glob.glob(dir_images + '/*fit')
+
+print "Found {} Alice data files in {}".format(np.size(file_list), dir_images)
+print "Reading..."
 
 (met, count_rate_target, count_rate) = read_alice_occ_data(file_list)
 
@@ -352,7 +362,7 @@ par.axis["top"].set_visible(False)           # Do not display the axis on *top* 
 p1, = host.plot(t, 1/dt * count_rate_target_30000, linewidth=0.5, ms=0.1, label='Alice, 67 Ori only')
 host.plot(t, 1/dt * count_rate_30000 - offset_total, marker = '.', linewidth=0.5, ms=0.1, label='Alice, Total [+offset]')
 host.plot(t, 1/dt * count_rate_30000 - count_rate_target_30000/dt + offset_diff, linewidth=0.5, ms=0.1, label='Alice, Total - 67 Ori [+offset]')
-#plt.plot(t, 1/dt * count_rate_target_fake_30000 - offset_fake, linewidth=0.5, ms=0.1, label='Fake Poisson data [+offset]')
+plt.plot(t, 1/dt * count_rate_target_fake_30000 - offset_fake, linewidth=0.5, ms=0.1, label='Fake Poisson data [+offset]')
 
 plt.title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + repr(dt * binning) + ' sec', \
                      fontsize=fs)
@@ -607,7 +617,14 @@ if (sequence == 'O_RING_OC2'):
     host.get_xaxis().get_major_formatter().set_useOffset(False)
 
     plt.xlim(hbt.mm(t))
-    plt.xlim((1792,1798))
+
+# Select the x range to zoom in on. Both of these ranges below are interesting areas to check out.
+# I don't think either are statistically significant.
+    
+    plt.xlim((1792,1798)) # Use 1792 .. 1798
+#    plt.xlim((1370,1380)) # Use 1370 .. 1380
+
+
     plt.ylim((1500,5000))
 #    par.set_xlim(hbt.mm(radius_bary)) # Not correct for the zoomed plot!
     plt.title(sequence + ' zoom', fontsize=fs)
@@ -671,11 +688,12 @@ print "Fresnel scale = " + repr(d_fresnel)
 # Make a binned plot right at the fresnel limit
 #==============================================================================
 
-plt.rcParams['figure.figsize'] = 25,5
-plt.plot(count_rate_target_5/dt,linestyle='none', ms=0.5, marker='.')
-plt.title(sequence + ', binning = 5 = Fresnel limit, min = ' + hbt.trunc(np.min(count_rate_target_5),2))
+plt.rcParams['figure.figsize'] = 15,5
+plt.plot(t, count_rate_target_5/dt,linestyle='none', ms=0.5, marker='.')
+plt.title(sequence + ', binning = 5 = Fresnel limit')
 plt.xlabel('Seconds')
 plt.ylabel('Counts/sec')
+plt.xlim(hbt.mm(t))
 plt.show()
 
 #==============================================================================
