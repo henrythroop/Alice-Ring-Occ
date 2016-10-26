@@ -67,7 +67,7 @@ from astropy.coordinates import SkyCoord
 # HBT imports
 import hbt
 
-def read_alice_occ_data(file_list):
+def read_alice_occ_data(file_list, sequence):
 
 #==============================================================================
 # Read the Alice data
@@ -78,62 +78,104 @@ def read_alice_occ_data(file_list):
     count_rate_all = []        # Count rate computed from the PIXEL_LIST_TABLE. Should match that in COUNT_RATE extension
     count_rate_target_all = [] # Count rate for the target only, extracted by spatially filtering the PIXEL_LIST_TABLE
     
-    d_target_summed = np.zeros((5,540))
+    if (sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3'): # Both of these are on the same star, in same position
+        d_target_summed = np.zeros((5,540)) # The 2D extracted region of the full spectral-spatial array.
+                                            # This is just the region we care about, around the star.
+
+        for i, file in enumerate(file_list):
+            
+            hdulist = fits.open(file)
+            d = hdulist['PRIMARY'].data # Units of this are float, but I'm not sure what they are. I would prefer raw counts.
+                                        # d is 32 x 1024 
+                                                              
+            # First go into the 'image', and sum photons at the right wavelength and spatial position
+            
+            d_target = d[13:18, 370:910] # Extract the right rows and columns, as per Steffl.
+                                         # First range is for the position (just a few rows)
+                                         # Second range is for wavelength  (broad, many columns)
+                                         
+            d_target_summed += d_target  # A 2D array of the extracted region
     
-    for i,file in enumerate(file_list):
+            # Now go through and process the FITS file in a second way, by summing all the photons in the list.
+            # This should in theory give us the same results as above.
+            
+            p = hdulist['PIXEL_LIST_TABLE'].data           # Array of length 29460 (for first file)
+            count_rate_fits_i = hdulist['COUNT_RATE'].data # Array of length 3308  (for first file)
+            
+            num_samples = hdulist['COUNT_RATE'].header['NAXIS1'] # Number of samples in this file
+            dt          = hdulist['COUNT_RATE'].header['SAMPLINT']  # Count rate sampling interval [sec]
+            
+            bins = hbt.frange(0, num_samples) # Get a list of all of the timestep bins, inclusive, for this file.
+                                                # Use '+1' so we create the histogram upper size bin.
+            
+            # Now downselect the pixel list for just the photons in the proper X and Y position on the detector
+            
+            is_good = (p['Y_INDEX'] < 19) & (p['Y_INDEX'] >= 15) & (p['X_INDEX'] > 370) & (p['X_INDEX'] < 910)
         
-        hdulist = fits.open(file)
-        d = hdulist['PRIMARY'].data # Units of this are float, but I'm not sure what they are. I would prefer raw counts.
-        d_target = d[13:18, 370:910]
-        d_target_summed += d_target
-        p = hdulist['PIXEL_LIST_TABLE'].data
-        count_rate_fits_i = hdulist['COUNT_RATE'].data
-        num_samples = hdulist['COUNT_RATE'].header['NAXIS1'] # Number of samples in this file
-        dt          = hdulist['COUNT_RATE'].header['SAMPLINT']  # Count rate sampling interval [sec]
+            # Now we have a list of all of the good pixels. For each of these, now we want to grab its timestep.
         
-        bins = hbt.frange(0, num_samples) # Get a list of all of the timestep bins, inclusive, for this file.
-                                            # Use '+1' so we create the histogram upper size bin.
+            timesteps_good = p['TIMESTEP'][is_good]
+            timesteps_all  = p['TIMESTEP']
         
-        # Now downselect the pixel list for just the photons in the proper X and Y position on the detector
+        # Now count how many photons are in each timestep bin. I have defined those timestep bins up above.
         
-        is_good = (p['Y_INDEX'] < 19) & (p['Y_INDEX'] >= 15) & (p['X_INDEX'] > 370) & (p['X_INDEX'] < 910)
-    
-        # Now we have a list of all of the good pixels. For each of these, now we want to grab its timestep.
-    
-        timesteps_good = p['TIMESTEP'][is_good]
-        timesteps_all  = p['TIMESTEP']
-    
-    # Now count how many photons are in each timestep bin. I have defined those timestep bins up above.
-    
-        (count_rate_target_i, junk) = np.histogram(timesteps_good, bins)
-        (count_rate_i, junk)        = np.histogram(timesteps_all,  bins) 
-        met_i = hdulist['PRIMARY'].header['STARTMET'] + dt * np.array(range(num_samples))
-              
-    #    print "File " + os.path.basename(file) + ' : ' + repr(np.sum(count_rate_target_i)) + ' / ' + repr(np.sum(count_rate_i))
-    
-    # Now append these into the output lists
-    
-        count_rate_fits_all.append(count_rate_fits_i)
-        count_rate_all.append(count_rate_i)
-        count_rate_target_all.append(count_rate_target_i)
-        met_all.append(met_i)
+            (count_rate_target_i, junk) = np.histogram(timesteps_good, bins)
+            (count_rate_i, junk)        = np.histogram(timesteps_all,  bins) 
+            met_i = hdulist['PRIMARY'].header['STARTMET'] + dt * np.array(range(num_samples))
+                  
+        #    print "File " + os.path.basename(file) + ' : ' + repr(np.sum(count_rate_target_i)) + ' / ' + repr(np.sum(count_rate_i))
         
-        hdulist.close()
-    
-    count_rate_fits  = np.array([item for sublist in count_rate_fits_all for item in sublist])  # Flatten the count rate (from 2D, to 1D)
-    count_rate_fits  = np.array(count_rate_fits, dtype=float)					          # Convert to float. Otherwise get wraparound.
-    
-    count_rate  = np.array([item for sublist in count_rate_all for item in sublist])
-    count_rate  = np.array(count_rate, dtype=float)					  
-    
-    count_rate_target  = np.array([item for sublist in count_rate_target_all for item in sublist]) 
-    count_rate_target  = np.array(count_rate_target, dtype=float)					  
-    
-    met         = np.array([item for sublist in met_all for item in sublist])         # Flatten the MET array  (from 2D, to 1D)
-    met         = np.array(met, dtype=float)
+        # Now append these into the output lists
+        
+            count_rate_fits_all.append(count_rate_fits_i)
+            count_rate_all.append(count_rate_i)
+            count_rate_target_all.append(count_rate_target_i)
+            met_all.append(met_i)
+
+            hdulist.close()
+
+        count_rate_fits  = np.array([item for sublist in count_rate_fits_all for item in sublist])  # Flatten the count rate 
+                                                                                                    # (from 2D, to 1D)
+        count_rate_fits  = np.array(count_rate_fits, dtype=float)					       # Convert to float - 
+                                                                                                    # Otherwise get wraparound.
+        
+        count_rate  = np.array([item for sublist in count_rate_all for item in sublist])
+        count_rate  = np.array(count_rate, dtype=float)					  
+        
+        count_rate_target  = np.array([item for sublist in count_rate_target_all for item in sublist]) 
+        count_rate_target  = np.array(count_rate_target, dtype=float)					  
+        
+        met         = np.array([item for sublist in met_all for item in sublist])         # Flatten the MET array  (from 2D, to 1D)
+        met         = np.array(met, dtype=float)
     
     return (met, count_rate_target, count_rate)
 
+                                         
+    if (sequence == 'STELLAROC1'):
+
+        d_target_summed_1 = np.zeros((4,540))
+        d_target_summed_2 = np.zeros((4,540))
+            
+        for i, file in enumerate(file_list):
+            
+            hdulist = fits.open(file)
+            d = hdulist['PRIMARY'].data # Units of this are float, but I'm not sure what they are. I would prefer raw counts.
+
+             
+            d_target = d[9:13, 370:910] # Flux for first star (away from lollipop)
+                                         
+            d_target_summed_1 += d_target  # A 2D array of the extracted region
+    
+            d_target = d[17:21, 370:910] # Flux for second star (toward lollipop)
+            d_target_summed_2 += d_target
+                
+            hdulist.close()
+            
+            count_rate_target_1 = np.sum(d_target_summed_1, 0)
+            count_rate_target_2 = np.sum(d_target_summed_2, 0)
+            
+        return (0, count_rate_target_1, count_rate_target_2)    
+ 
 #==============================================================================
 # Start of main program
 #==============================================================================
@@ -145,6 +187,7 @@ def read_alice_occ_data(file_list):
 
 #sequence 	= 'O_RING_OC3'
 sequence 	= 'O_RING_OC2'
+sequence   = 'STELLAROCC1'
 
 binning      = 25000		# Smoothing. 25000 is too much (shows opposite trend!). 5000 and 1000 look roughly similar.
                             # To be meaningful, the binning timescale must be less than the deadband timescale (~20-30 sec RT).
@@ -164,7 +207,11 @@ if not DO_HICAD:
 
 if (sequence == 'O_RING_OC2') and (DO_HICAD):
     dir_images = '/Users/throop/Data/NH_Alice_Ring/O_RING_OC2/data/pluto/level2/ali_hicad'
-    
+
+if (sequence == 'STELLAROCC1'):
+    DO_HICAD = False
+    dir_images = '/Users/throop/Data/NH_Alice_Ring/STELLAROCC1/data/pluto/level2/ali/all'
+
 file_tm    = '/Users/throop/gv/dev/kernels/15sci_rhr_25aug16.tm' # Def need to use an encounter kernel here.
 
 cspice.furnsh(file_tm)
@@ -178,7 +225,7 @@ file_list = glob.glob(dir_images + '/*fit')
 print "Found {} Alice data files in {}".format(np.size(file_list), dir_images)
 print "Reading..."
 
-(met, count_rate_target, count_rate) = read_alice_occ_data(file_list)
+(met, count_rate_target, count_rate) = read_alice_occ_data(file_list, sequence)
 
 dt = int((met[1] - met[0])*1000)/1000.          # Interval between consecutive samples
 
@@ -204,9 +251,13 @@ num_dt   = np.size(et)
 # NB: For FSS, I got the FSS-Sun angle directly from Gabe -- I didn't get it from SPICE.
 
 # Get vector to star. 67 Ori = HR 2159 = HD 41753, a V=4.2 B3V. RA~91.89, Dec~14.77.
-    
-pos_star_str = "06 07 34.326 +14 46 06.51"  # Vizier coords in FK5 = J2K
 
+if (sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3'):
+    pos_star_str = "06 07 34.326 +14 46 06.51"  # Vizier coords in FK5 = J2K
+
+if (sequence == 'STELLAROCC1'):
+    pos_star_str = "06 12 03.27955 +16 07 49.4614."  # Vizier coords in FK5 = J2K. 69 Ori, closer to lollipop 
+         
 pos_star = SkyCoord(pos_star_str, unit=(u.hourangle, u.deg))
 ra_star  = pos_star.ra.rad
 dec_star = pos_star.dec.rad
