@@ -44,6 +44,7 @@ from   scipy.stats import linregress
 from   photutils import daofind
 import wcsaxes
 import time
+import sys  # For stdout.write, without newline
 from scipy.interpolate import griddata
 
 from mpl_toolkits.axes_grid1 import host_subplot # For adding a second axis to a plot
@@ -67,37 +68,52 @@ from astropy.coordinates import SkyCoord
 # HBT imports
 import hbt
 
-def read_alice_occ_data(file_list, sequence):
+def read_alice_occ_data(file_list, sequence, xlim, ylim, verbose=True):
 
 #==============================================================================
 # Read the Alice data
 #==============================================================================
-    
+
+# The deal here is that we can read the data in several ways.
+#  o COUNT_RATE.data .  This gives total rate, for each timestep, integrated across the detector.
+#  o PRIMARY.data .     This gives an image, for each file. It is integrated in time (~7 sec per file)
+#  o PIXEL_LIST_TABLE . This is the 'raw' data, with a time-tagged list of photons.
+#                       Need to use this, if we want to get high-time-cadence photon counts for individual rows/columns.
+
     met_all = []               # A long array with a list of all of the timestamps, one per 4 ms (i.e., at 250 hz)
     count_rate_fits_all = []   # The count rate as read from the COUNT_RATE extension directly
     count_rate_all = []        # Count rate computed from the PIXEL_LIST_TABLE. Should match that in COUNT_RATE extension
     count_rate_target_all = [] # Count rate for the target only, extracted by spatially filtering the PIXEL_LIST_TABLE
+ 
+    # O_RING_OC2, O_RING_OC3
     
-    if (sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3'): # Both of these are on the same star, in same position
-        d_target_summed = np.zeros((5,540)) # The 2D extracted region of the full spectral-spatial array.
+    if (True):
+        image_target_summed = np.zeros((ylim[1]-ylim[0],xlim[1]-xlim[0])) 
+                                            # The 2D extracted region of the full spectral-spatial array.
                                             # This is just the region we care about, around the star.
-
+        image_summed        = np.zeros((32, 1024))  # A full image
+        
         for i, file in enumerate(file_list):
+            if (verbose):
+                sys.stdout.write('.')
             
             hdulist = fits.open(file)
-            d = hdulist['PRIMARY'].data # Units of this are float, but I'm not sure what they are. I would prefer raw counts.
+            image = hdulist['PRIMARY'].data # Units of this are float, but I'm not sure what they are. I would prefer raw counts.
                                         # d is 32 x 1024 
                                                               
             # First go into the 'image', and sum photons at the right wavelength and spatial position
             
-            d_target = d[13:18, 370:910] # Extract the right rows and columns, as per Steffl.
+            image_target = image[ylim[0]:ylim[1], xlim[0]:xlim[1]] # Extract the right rows and columns, as per Steffl.
                                          # First range is for the position (just a few rows)
                                          # Second range is for wavelength  (broad, many columns)
                                          
-            d_target_summed += d_target  # A 2D array of the extracted region
+            image_target_summed += image_target  # A 2D array of the extracted region
     
+            image_summed        += image
+            
             # Now go through and process the FITS file in a second way, by summing all the photons in the list.
-            # This should in theory give us the same results as above.
+            # This should in theory give us the same results as above, if we spatially integrate.
+            # Also, it gives us the ability to *not* spatially integrate, and extract individual rows/columns.
             
             p = hdulist['PIXEL_LIST_TABLE'].data           # Array of length 29460 (for first file)
             count_rate_fits_i = hdulist['COUNT_RATE'].data # Array of length 3308  (for first file)
@@ -110,7 +126,7 @@ def read_alice_occ_data(file_list, sequence):
             
             # Now downselect the pixel list for just the photons in the proper X and Y position on the detector
             
-            is_good = (p['Y_INDEX'] < 19) & (p['Y_INDEX'] >= 15) & (p['X_INDEX'] > 370) & (p['X_INDEX'] < 910)
+            is_good = (p['Y_INDEX'] < ylim[1]) & (p['Y_INDEX'] >= ylim[0]) & (p['X_INDEX'] > xlim[0]) & (p['X_INDEX'] < xlim[1])
         
             # Now we have a list of all of the good pixels. For each of these, now we want to grab its timestep.
         
@@ -136,7 +152,7 @@ def read_alice_occ_data(file_list, sequence):
 
         count_rate_fits  = np.array([item for sublist in count_rate_fits_all for item in sublist])  # Flatten the count rate 
                                                                                                     # (from 2D, to 1D)
-        count_rate_fits  = np.array(count_rate_fits, dtype=float)					       # Convert to float - 
+        count_rate_fits  = np.array(count_rate_fits, dtype=float)					           # Convert to float - 
                                                                                                     # Otherwise get wraparound.
         
         count_rate  = np.array([item for sublist in count_rate_all for item in sublist])
@@ -148,33 +164,8 @@ def read_alice_occ_data(file_list, sequence):
         met         = np.array([item for sublist in met_all for item in sublist])         # Flatten the MET array  (from 2D, to 1D)
         met         = np.array(met, dtype=float)
     
-    return (met, count_rate_target, count_rate)
+    return (met, count_rate_target, count_rate, image_target_summed, image_summed)
 
-                                         
-    if (sequence == 'STELLAROC1'):
-
-        d_target_summed_1 = np.zeros((4,540))
-        d_target_summed_2 = np.zeros((4,540))
-            
-        for i, file in enumerate(file_list):
-            
-            hdulist = fits.open(file)
-            d = hdulist['PRIMARY'].data # Units of this are float, but I'm not sure what they are. I would prefer raw counts.
-
-             
-            d_target = d[9:13, 370:910] # Flux for first star (away from lollipop)
-                                         
-            d_target_summed_1 += d_target  # A 2D array of the extracted region
-    
-            d_target = d[17:21, 370:910] # Flux for second star (toward lollipop)
-            d_target_summed_2 += d_target
-                
-            hdulist.close()
-            
-            count_rate_target_1 = np.sum(d_target_summed_1, 0)
-            count_rate_target_2 = np.sum(d_target_summed_2, 0)
-            
-        return (0, count_rate_target_1, count_rate_target_2)    
  
 #==============================================================================
 # Start of main program
@@ -187,7 +178,7 @@ def read_alice_occ_data(file_list, sequence):
 
 #sequence 	= 'O_RING_OC3'
 sequence 	= 'O_RING_OC2'
-sequence   = 'STELLAROCC1'
+#sequence   = 'STELLAROCC1'
 
 binning      = 25000		# Smoothing. 25000 is too much (shows opposite trend!). 5000 and 1000 look roughly similar.
                             # To be meaningful, the binning timescale must be less than the deadband timescale (~20-30 sec RT).
@@ -198,20 +189,27 @@ binning      = 25000		# Smoothing. 25000 is too much (shows opposite trend!). 50
                             
 fs           	= 15		# Font size
 plt.rc('image', interpolation='None')       # Turn of interpolation for imshow. Could also do hbt.set_plot_defaults()
-#nu.reset_units()
 
-DO_HICAD = True # Use this for the OC2 data
+# Figure out the directory, stellar positions, etc. based on which sequence we are using
 
-if not DO_HICAD:
-    dir_images = '/Users/throop/Data/NH_Alice_Ring/' + sequence + '/data/pluto/level2/ali/all'
+if (sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3'):
+    xlim = np.array([370,910])  # Wavelength
+    ylim = np.array([13,19])    # Spatial of the star
 
-if (sequence == 'O_RING_OC2') and (DO_HICAD):
-    dir_images = '/Users/throop/Data/NH_Alice_Ring/O_RING_OC2/data/pluto/level2/ali_hicad'
-
+if (sequence == 'O_RING_OC2'):
+    DO_HICAD = True             # Used hicad since that's where the data was when I grabbed it
+    
 if (sequence == 'STELLAROCC1'):
     DO_HICAD = False
-    dir_images = '/Users/throop/Data/NH_Alice_Ring/STELLAROCC1/data/pluto/level2/ali/all'
-
+    xlim = np.array([370,910]) # Wavelength 
+    ylim = np.array([9,13])    # Spatial, star #1
+    ylim_2 = np.array([17,21])   # Spatial, star #2
+    
+if not DO_HICAD:
+    dir_images = '/Users/throop/Data/NH_Alice_Ring/' + sequence + '/data/pluto/level2/ali/all'
+else:
+    dir_images = '/Users/throop/Data/NH_Alice_Ring/' + sequence + '/data/pluto/level2/ali_hicad'
+    
 file_tm    = '/Users/throop/gv/dev/kernels/15sci_rhr_25aug16.tm' # Def need to use an encounter kernel here.
 
 cspice.furnsh(file_tm)
@@ -225,7 +223,18 @@ file_list = glob.glob(dir_images + '/*fit')
 print "Found {} Alice data files in {}".format(np.size(file_list), dir_images)
 print "Reading..."
 
-(met, count_rate_target, count_rate) = read_alice_occ_data(file_list, sequence)
+# Read the entire Alice sequence. Extract the total count rate (across frame),
+# and count rate within a box defined by xlim, ylim.
+
+(met, count_rate_target, count_rate, image_target_summed, image_summed) = \
+  read_alice_occ_data(file_list, sequence, xlim, ylim, verbose=True)
+
+stop
+
+# If there are two stars, then also read count rate of second one.
+
+if (sequence == 'STELLAROCC1'):
+  (met, count_rate_target_2, count_rate_2) = read_alice_occ_data(file_list, sequence, xlim, ylim_2, verbose=True)
 
 dt = int((met[1] - met[0])*1000)/1000.          # Interval between consecutive samples
 
@@ -256,7 +265,7 @@ if (sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3'):
     pos_star_str = "06 07 34.326 +14 46 06.51"  # Vizier coords in FK5 = J2K
 
 if (sequence == 'STELLAROCC1'):
-    pos_star_str = "06 12 03.27955 +16 07 49.4614."  # Vizier coords in FK5 = J2K. 69 Ori, closer to lollipop 
+    pos_star_str = "06 12 03.27955 +16 07 49.4614"  # Vizier coords in FK5 = J2K. 69 Ori, closer to lollipop 
          
 pos_star = SkyCoord(pos_star_str, unit=(u.hourangle, u.deg))
 ra_star  = pos_star.ra.rad
