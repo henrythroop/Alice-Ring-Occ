@@ -68,7 +68,7 @@ from astropy.coordinates import SkyCoord
 # HBT imports
 import hbt
 
-def read_alice_occ_data(file_list, xlim, ylim, verbose=True):
+def read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=False):
 
 #==============================================================================
 # Read the Alice data
@@ -94,8 +94,14 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True):
                                             # The 2D extracted region of the full spectral-spatial array.
                                             # This is just the region we care about, around the star.
         image_summed        = np.zeros((32, 1024))  # A full image
+
+        # For debugging purposes: if requested, extract just a short subset of the data
         
-        for i, file in enumerate(file_list):
+        file_list_use = file_list
+        if (short):
+            file_list_use = file_list_use[0:100]
+
+        for i, file in enumerate(file_list_use):
             if (verbose):
                 sys.stdout.write('.')
             
@@ -179,8 +185,10 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True):
 # (NB: The spelling / capitalization is inconsistent in SAPNAME vs. VISITNAM. I have standardized it here.)
 
 #sequence 	= 'O_RING_OC3'
-sequence 	= 'O_RING_OC2'
-#sequence   = 'STELLAROCC1'
+#sequence 	= 'O_RING_OC2'
+sequence   = 'STELLAROCC1'
+
+DO_ABBREVIATED = False       # For debugging. Just use a subset of the data?
 
 binning      = 25000		# Smoothing. 25000 is too much (shows opposite trend!). 5000 and 1000 look roughly similar.
                             # To be meaningful, the binning timescale must be less than the deadband timescale (~20-30 sec RT).
@@ -198,7 +206,7 @@ if (sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3'):
     xlim = np.array([370,910])  # Wavelength
     ylim = np.array([13,19])    # Spatial of the star
 
-if (sequence == 'O_RING_OC2'):
+if (sequence == 'O_RING_OC2'): 
     DO_HICAD = True             # Used hicad since that's where the data was when I grabbed it
     
 if (sequence == 'STELLAROCC1'):
@@ -232,7 +240,7 @@ print "Reading..."
 # and count rate within a box defined by xlim, ylim.
 
 (met, count_rate_target, count_rate, image_target_summed, image_summed) = \
-  read_alice_occ_data(file_list, xlim, ylim, verbose=True)
+  read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=DO_ABBREVIATED)
 
 
 # If there are two stars, then also read count rate of second one.
@@ -243,7 +251,7 @@ print "Reading..."
 if (sequence == 'STELLAROCC1'):
     print 'Reading star 2...'    
     (met, count_rate_target_2, count_rate_2, image_target_summed_2, image_summed) = \
-        read_alice_occ_data(file_list, xlim, ylim_2, verbose=True)
+        read_alice_occ_data(file_list, xlim, ylim_2, verbose=True, short=DO_ABBREVIATED)
 
 dt = int((met[1] - met[0])*1000)/1000.          # Interval between consecutive samples
 
@@ -265,6 +273,7 @@ if (sequence == 'STELLAROCC1'): # Plot second target as well, if we have it
     plt.title(sequence + ', target #2')
     plt.show()
 
+    
 # Now start the analysis
 
 # Generate fake count rate data
@@ -274,7 +283,7 @@ count_rate_fake        = np.random.poisson(np.mean(count_rate), np.size(count_ra
 
 # Compute UTC and ET for the initial timestep
 
-utc_start= hbt.met2utc(np.min(met))
+utc_start= hbt.met2utc(np.min(met)) # Crashes kernel
 et_start = cspice.utc2et(utc_start)
 
 # Compute MET and ET for all timesteps. Both ET and MET are in seconds, but their offset is different.
@@ -292,7 +301,8 @@ num_dt   = np.size(et)
 
 # Get vector to star. 67 Ori = HR 2159 = HD 41753, a V=4.2 B3V. RA~91.89, Dec~14.77.
 
-#print('computing boresight positions...')
+print('computing boresight positions...')
+
 
 if (sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3'):
     pos_star_str = "06 07 34.326 +14 46 06.51"  # Vizier coords in FK5 = J2K
@@ -322,6 +332,7 @@ for i,et_i in enumerate(et):
 
   (junk, ra[i], dec[i]) = cspice.recrad(vec_alice_j2k)
 
+
 #==============================================================================
 # Use linear fit to compute correlation between count rate and RA / Dec
 #==============================================================================
@@ -334,6 +345,8 @@ count_rate_fixed     = count_rate - count_rate_nonlinear
 #==============================================================================
 # Smooth the data at several different binnings
 #==============================================================================
+
+print("Smoothing to various binnings...")
 
 count_rate_fixed_30000 = hbt.smooth_boxcar(count_rate_fixed, 30000)
 count_rate_fixed_3000 = hbt.smooth_boxcar(count_rate_fixed, 3000)
@@ -354,6 +367,10 @@ count_rate_fake_3000 = hbt.smooth_boxcar(count_rate_fake, 3000)
 count_rate_fake_30000 = hbt.smooth_boxcar(count_rate_fake, 30000)
 count_rate_target_fake_30000 = hbt.smooth_boxcar(count_rate_target_fake, 30000)
 
+if (sequence == 'STELLAROCC1'):
+    
+    count_rate_target_2_3000 = hbt.smooth_boxcar(count_rate_target_2, 3000)
+
 ##########
 # Calculate statistics
 ##########
@@ -373,6 +390,8 @@ sigma_s = np.mean(count_rate) * np.sqrt(np.mean(count_rate * binning)) / (np.mea
          
 #et_start = np.min(et)
 #et_end   = np.max(et) + duration[-1]
+
+print("Getting distance to Pluto...")
 
 plane_plu = cspice.nvp2pl([0,0,1], [0,0,0])    # nvp2pl: Normal Vec + Point to Plane
 
@@ -416,67 +435,74 @@ for i,et_i in enumerate(et_vals):
 # Make a time-series plot of Counts vs. Time, for Target, Off-Target, Fake Data, etc.
 #==============================================================================
 
-plt.rcParams['figure.figsize'] = 15,5
 
 # Plot of count rate vs. time
 
-if (sequence == 'O_RING_OC3'):
-    offset_fake = 60
-    offset_total = 765
-    offset_diff = 2545
-if (sequence == 'O_RING_OC2'):
-    offset_fake = 45
-    offset_total = 765
-    offset_diff = 2630
+if (sequence == 'O_RING_OC3') or (sequence == 'O_RING_OC2'): # Complex plot -- do this only for the single stellar occs
 
-binning = 30000
-
-do_fake = False
-
-# Jump through some hoops to place a second x-axis here: et vs. radius_pluto
-
-host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
-par = host.twiny()                           # Set up the parasite axis
-plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction (like figure.figsize)
-offset = 50                                  # How far away from the main plot the parasite axis is. Don't know the units.
-new_fixed_axis     = par.get_grid_helper().new_fixed_axis
-par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
-                                        offset=(0,-offset))
-par.axis["bottom"].toggle(all=True)          # Make sure the bottom axis is displayed
-par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
-        
-p1, = host.plot(t, 1/dt * count_rate_target_30000, linewidth=0.5, ms=0.1, label='Alice, 67 Ori only')
-host.plot(t, 1/dt * count_rate_30000 - offset_total, marker = '.', linewidth=0.5, ms=0.1, label='Alice, Total [+offset]')
-host.plot(t, 1/dt * count_rate_30000 - count_rate_target_30000/dt + offset_diff, linewidth=0.5, ms=0.1, label='Alice, Total - 67 Ori [+offset]')
-plt.plot(t, 1/dt * count_rate_target_fake_30000 - offset_fake, linewidth=0.5, ms=0.1, label='Fake Poisson data [+offset]')
-
-plt.title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + repr(dt * binning) + ' sec', \
-                     fontsize=fs)
-host.get_xaxis().get_major_formatter().set_useOffset(False)
-
-#plt.errorbar(200, np.mean(count_rate_target_3000) + 5 * sigma_s, xerr=binning*dt/2, yerr=None, label='Binning Width', linewidth=2) 
-			# X 'error bar' -- show the bin width
-#plt.errorbar(300, np.mean(count_rate_target_3000) + 5 * sigma_s, xerr=None, yerr=sigma_s/2, label='1$\sigma$ shot noise', linewidth=2) 
-			# Y 'error bar' -- show the binned shot noise error
-plt.legend()
-plt.ylabel('Counts/sec (smoothed)', fontsize=fs)
-plt.xlabel('Time since ' + utc_start + ' [sec]', fontsize=fs)
-
-plt.xlim((t[binning], t[-binning])) # X limits for main plot. Remove transients at edges. 
-par.set_xlim(radius_bary)               # X limits for parasite plot. *** This is slightly off, since I am ignoring edges above
-par.set_xlabel('Distance from Pluto barycenter [km]', fontsize=fs)
-
-if (sequence == 'O_RING_OC3'):
-  plt.ylim((np.mean(count_rate_target_3000/dt) -13*sigma_s/dt, np.mean(count_rate_target_3000/dt) +11*sigma_s/dt))
-
-if (sequence == 'O_RING_OC2'):
-  plt.ylim((np.mean(count_rate_target_3000/dt) -9*sigma_s/dt, np.mean(count_rate_target_3000/dt) +8*sigma_s/dt))
+    plt.rcParams['figure.figsize'] = 15,5
     
-plt.show()
+    if (sequence == 'O_RING_OC3'):
+        offset_fake = 60
+        offset_total = 765
+        offset_diff = 2545
+        
+    if (sequence == 'O_RING_OC2'):
+        offset_fake = 45
+        offset_total = 765
+        offset_diff = 2630
+    
+        
+    binning = 30000
+    
+    do_fake = False
+    
+    # Jump through some hoops to place a second x-axis here: et vs. radius_pluto
+    
+    host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
+    par = host.twiny()                           # Set up the parasite axis
+    plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction (like figure.figsize)
+    offset = 50                                  # How far away from the main plot the parasite axis is. Don't know the units.
+    new_fixed_axis     = par.get_grid_helper().new_fixed_axis
+    par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
+                                            offset=(0,-offset))
+    par.axis["bottom"].toggle(all=True)          # Make sure the bottom axis is displayed
+    par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
+            
+    p1, = host.plot(t, 1/dt * count_rate_target_30000, linewidth=0.5, ms=0.1, label='Alice, 67 Ori only')
+    host.plot(t, 1/dt * count_rate_30000 - offset_total,               marker = '.', linewidth=0.5, ms=0.1, label='Alice, Total [+offset]')
+    host.plot(t, 1/dt * count_rate_30000 - count_rate_target_30000/dt + offset_diff, linewidth=0.5, ms=0.1, label='Alice, Total - 67 Ori [+offset]')
+    plt.plot(t, 1/dt * count_rate_target_fake_30000 - offset_fake, linewidth=0.5, ms=0.1, label='Fake Poisson data [+offset]')
+    
+    plt.title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + repr(dt * binning) + ' sec', \
+                         fontsize=fs)
+    host.get_xaxis().get_major_formatter().set_useOffset(False)
+    
+    #plt.errorbar(200, np.mean(count_rate_target_3000) + 5 * sigma_s, xerr=binning*dt/2, yerr=None, label='Binning Width', linewidth=2) 
+    			# X 'error bar' -- show the bin width
+    #plt.errorbar(300, np.mean(count_rate_target_3000) + 5 * sigma_s, xerr=None, yerr=sigma_s/2, label='1$\sigma$ shot noise', linewidth=2) 
+    			# Y 'error bar' -- show the binned shot noise error
+    plt.legend()
+    plt.ylabel('Counts/sec (smoothed)', fontsize=fs)
+    plt.xlabel('Time since ' + utc_start + ' [sec]', fontsize=fs)
+    
+    plt.xlim((t[binning], t[-binning])) # X limits for main plot. Remove transients at edges. 
+    par.set_xlim(radius_bary)               # X limits for parasite plot. *** This is slightly off, since I am ignoring edges above
+    par.set_xlabel('Distance from Pluto barycenter [km]', fontsize=fs)
+    
+    if (sequence == 'O_RING_OC3'):
+      plt.ylim((np.mean(count_rate_target_3000/dt) -13*sigma_s/dt, np.mean(count_rate_target_3000/dt) +11*sigma_s/dt))
+    
+    if (sequence == 'O_RING_OC2'):
+      plt.ylim((np.mean(count_rate_target_3000/dt) -9*sigma_s/dt, np.mean(count_rate_target_3000/dt) +8*sigma_s/dt))
+        
+    plt.show()
 
 #==============================================================================
 # Make a plot of (angle from star) vs (time). This is a line-plot of thruster firings.
 #==============================================================================
+
+plt.rcParams['figure.figsize'] = 15,5
 
 plt.plot(et - et[0], (vsep % 0.02) * hbt.r2d)
 plt.xlabel('Seconds since ' + utc_start, fontsize=fs)
@@ -533,6 +559,28 @@ ax.ticklabel_format(useOffset=False)
 plt.ylabel('DN (smoothed x ' + repr(crop) + ')', fontsize=fs)
 plt.show()
 
+if (sequence == 'STELLAROCC1'): # Made plot for first star above. Now do it for the second star
+    plt.rcParams['figure.figsize'] = 16,8
+    plt.subplot(1,2,1)
+    plt.rcParams['figure.figsize'] = 10,10
+    plt.plot(ra[crop:-crop]*hbt.r2d, count_rate_target_2_3000[crop:-crop], linestyle='none', marker='.', ms=0.1)
+    #plt.plot(ra[crop:-crop]*hbt.r2d, count_rate_nonlinear[crop:-crop] + np.mean(count_rate), color='red') # Add linear fit on top
+    plt.xlabel('RA [deg]', fontsize=fs)
+    plt.title(sequence + ': DN vs. Position, #2', fontsize=fs*1.5)
+    ax = plt.gca()
+    ax.ticklabel_format(useOffset=False)
+    plt.ylabel('DN (smoothed x ' + repr(crop) + ')', fontsize=fs)
+    
+    plt.subplot(1,2,2)
+    plt.rcParams['figure.figsize'] = 10,10
+    plt.plot(dec[crop:-crop]*hbt.r2d, count_rate_target_2_3000[crop:-crop], linestyle='none', marker='.', ms=0.1)
+    plt.xlabel('Dec [deg]', fontsize=fs)
+    plt.title(sequence + ': DN vs. Position, #2', fontsize=fs*1.5)
+    ax = plt.gca()
+    ax.ticklabel_format(useOffset=False)
+    plt.ylabel('DN (smoothed x ' + repr(crop) + ')', fontsize=fs)
+    plt.show()
+    
 #==============================================================================
 # Regrid the data, and make a plot of the actual spatial variation.
 # This is similar to plots above, but in a color image.
@@ -551,7 +599,7 @@ num_dy = num_dx
 ra_arr  = np.linspace(np.min(ra),  np.max(ra),  num_dx)
 dec_arr = np.linspace(np.min(dec), np.max(dec), num_dy)
 
-count_rate_s_arr = griddata((ra[crop:-crop], dec[crop:-crop]), count_rate_target_3000[crop:-crop], 
+count_rate_s_arr = griddata((ra[crop:-crop], dec[crop:-crop]), count_rate_target_2_3000[crop:-crop], 
                             (ra_arr[None,:], dec_arr[:,None]), method='cubic')
 
 # Make the plot, scaled vertically as per the sequence read in
@@ -560,7 +608,10 @@ if (sequence == 'O_RING_OC3'):
     plt.imshow(count_rate_s_arr, interpolation='none', vmin=13,vmax=14)
 if (sequence == 'O_RING_OC2'):
     plt.imshow(count_rate_s_arr, interpolation='none', vmin=16.4,vmax=16.8)
-
+if (sequence == 'STELLAROCC1'):
+    plt.imshow(count_rate_s_arr, interpolation='none', vmin=3,vmax=6) # Star 1. Not a really useful plot, though.
+    plt.imshow(count_rate_s_arr, interpolation='none', vmin=0,vmax=3) # Star 2
+    
 plt.title(sequence + ', Mean DN vs position, binning=' + repr(binning), fontsize=fs)
 plt.xlabel('RA bin', fontsize=fs)
 plt.ylabel('Dec bin', fontsize=fs)
