@@ -68,7 +68,7 @@ from astropy.coordinates import SkyCoord
 # HBT imports
 import hbt
 
-def read_alice_occ_data(file_list, sequence, xlim, ylim, verbose=True):
+def read_alice_occ_data(file_list, xlim, ylim, verbose=True):
 
 #==============================================================================
 # Read the Alice data
@@ -88,6 +88,8 @@ def read_alice_occ_data(file_list, sequence, xlim, ylim, verbose=True):
     # O_RING_OC2, O_RING_OC3
     
     if (True):
+        print "read_alice_occ_data: ylim = " + repr(ylim)
+        
         image_target_summed = np.zeros((ylim[1]-ylim[0],xlim[1]-xlim[0])) 
                                             # The 2D extracted region of the full spectral-spatial array.
                                             # This is just the region we care about, around the star.
@@ -126,7 +128,7 @@ def read_alice_occ_data(file_list, sequence, xlim, ylim, verbose=True):
             
             # Now downselect the pixel list for just the photons in the proper X and Y position on the detector
             
-            is_good = (p['Y_INDEX'] < ylim[1]) & (p['Y_INDEX'] >= ylim[0]) & (p['X_INDEX'] > xlim[0]) & (p['X_INDEX'] < xlim[1])
+            is_good = (p['Y_INDEX'] < ylim[1]) & (p['Y_INDEX'] >= ylim[0]) & (p['X_INDEX'] >= xlim[0]) & (p['X_INDEX'] < xlim[1])
         
             # Now we have a list of all of the good pixels. For each of these, now we want to grab its timestep.
         
@@ -202,8 +204,11 @@ if (sequence == 'O_RING_OC2'):
 if (sequence == 'STELLAROCC1'):
     DO_HICAD = False
     xlim = np.array([370,910]) # Wavelength 
-    ylim = np.array([9,13])    # Spatial, star #1
-    ylim_2 = np.array([17,21])   # Spatial, star #2
+    ylim = np.array([10,13])    # Spatial, star #1, brighter, v = 4.9, and closer to lollipop
+    ylim_2 = np.array([7,10])   # Spatial, star #2, fainter,  v = 5.5, and further toward bottom of stick.
+                                # NB: [10,13] means three rows (10,11,12) -- not four.
+
+    ylim_12 = np.array([6,14])  # Include both targets in one.
     
 if not DO_HICAD:
     dir_images = '/Users/throop/Data/NH_Alice_Ring/' + sequence + '/data/pluto/level2/ali/all'
@@ -227,17 +232,43 @@ print "Reading..."
 # and count rate within a box defined by xlim, ylim.
 
 (met, count_rate_target, count_rate, image_target_summed, image_summed) = \
-  read_alice_occ_data(file_list, sequence, xlim, ylim, verbose=True)
+  read_alice_occ_data(file_list, xlim, ylim, verbose=True)
 
-stop
 
 # If there are two stars, then also read count rate of second one.
+# Programmatically this is a bit inefficient since I read the entire dataset 
+# a second time. Function could be rewritten to extract two stars at once, 
+# but that is a lot of work.
 
 if (sequence == 'STELLAROCC1'):
-  (met, count_rate_target_2, count_rate_2) = read_alice_occ_data(file_list, sequence, xlim, ylim_2, verbose=True)
+    print 'Reading star 2...'    
+    (met, count_rate_target_2, count_rate_2, image_target_summed_2, image_summed) = \
+        read_alice_occ_data(file_list, xlim, ylim_2, verbose=True)
 
 dt = int((met[1] - met[0])*1000)/1000.          # Interval between consecutive samples
 
+# Make a quick plot of the full image and the target
+
+stretch = astropy.visualization.PercentileInterval(99)
+ 
+hbt.figsize((10,5))
+plt.imshow(stretch(image_summed), aspect=10)
+plt.title(sequence + ', full')
+plt.show()
+
+plt.imshow(stretch(image_target_summed), aspect=10)
+plt.title(sequence + ', target')
+plt.show()
+
+if (sequence == 'STELLAROCC1'): # Plot second target as well, if we have it
+    plt.imshow(stretch(image_target_summed_2), aspect=10)
+    plt.title(sequence + ', target #2')
+    plt.show()
+
+# Now start the analysis
+
+# Generate fake count rate data
+ 
 count_rate_target_fake = np.random.poisson(np.mean(count_rate_target), np.size(count_rate))
 count_rate_fake        = np.random.poisson(np.mean(count_rate), np.size(count_rate))
 
@@ -260,6 +291,8 @@ num_dt   = np.size(et)
 # NB: For FSS, I got the FSS-Sun angle directly from Gabe -- I didn't get it from SPICE.
 
 # Get vector to star. 67 Ori = HR 2159 = HD 41753, a V=4.2 B3V. RA~91.89, Dec~14.77.
+
+#print('computing boresight positions...')
 
 if (sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3'):
     pos_star_str = "06 07 34.326 +14 46 06.51"  # Vizier coords in FK5 = J2K
@@ -320,13 +353,6 @@ count_rate_30000 = hbt.smooth_boxcar(count_rate, 30000)
 count_rate_fake_3000 = hbt.smooth_boxcar(count_rate_fake, 3000)
 count_rate_fake_30000 = hbt.smooth_boxcar(count_rate_fake, 30000)
 count_rate_target_fake_30000 = hbt.smooth_boxcar(count_rate_target_fake, 30000)
-
-# Compute truncated versions of the time arrays, just in case they are useful
-# _s extension = 'smoothed'
-
-#t_s          = t[binning:-binning]
-#et_s         = et[binning:-binning]
-#met_s        = met[binning:-binning]
 
 ##########
 # Calculate statistics
