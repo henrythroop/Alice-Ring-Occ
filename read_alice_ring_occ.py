@@ -498,6 +498,24 @@ if (sequence == 'O_RING_OC3') or (sequence == 'O_RING_OC2'): # Complex plot -- d
         
     plt.show()
 
+if (sequence == 'STELLAROCC1'):
+    plt.rcParams['figure.figsize'] = 15,5
+
+    plt.plot(t, 1/dt * count_rate_target_3000, label='Star #1')
+    plt.plot(t, 1/dt * count_rate_target_2_3000, label='Star #2 (occulted)')      
+    plt.plot(t, 1/dt * count_rate_3000, label = 'Total')
+    plt.xlabel('Time since ' + utc_start + ' [sec]', fontsize=fs)
+    plt.title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + repr(dt * binning) + ' sec', \
+                         fontsize=fs)  
+    plt.legend()
+    plt.show()
+
+#==============================================================================
+# For STELLAROCC1: make a plot of (distance to Pluto) vs (time) for each star    
+#==============================================================================
+
+if (sequence == 'STELLAROCC1'):
+    
 #==============================================================================
 # Make a plot of (angle from star) vs (time). This is a line-plot of thruster firings.
 #==============================================================================
