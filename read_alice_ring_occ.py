@@ -30,7 +30,7 @@ import astropy.modeling
 from   scipy.optimize import curve_fit
 #from   pylab import *  # So I can change plot size.
                        # Pylab defines the 'plot' command
-import cspice
+import spiceypy as sp # was cspice
 import skimage
 from   itertools import izip    # To loop over groups in a table -- see astropy tables docs
 from   astropy.wcs import WCS
@@ -106,7 +106,8 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=False):
                 sys.stdout.write('.')
             
             hdulist = fits.open(file)
-            image = hdulist['PRIMARY'].data # Units of this are float, but I'm not sure what they are. I would prefer raw counts.
+            image = hdulist['PRIMARY'].data # Units of this are float, but I'm not sure what they are. 
+                                        # I prefer raw counts.
                                         # d is 32 x 1024 
                                                               
             # First go into the 'image', and sum photons at the right wavelength and spatial position
@@ -134,7 +135,8 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=False):
             
             # Now downselect the pixel list for just the photons in the proper X and Y position on the detector
             
-            is_good = (p['Y_INDEX'] < ylim[1]) & (p['Y_INDEX'] >= ylim[0]) & (p['X_INDEX'] >= xlim[0]) & (p['X_INDEX'] < xlim[1])
+            is_good = (p['Y_INDEX'] < ylim[1]) & (p['Y_INDEX'] >= ylim[0]) & (p['X_INDEX'] >= xlim[0]) & \
+                      (p['X_INDEX'] < xlim[1])
         
             # Now we have a list of all of the good pixels. For each of these, now we want to grab its timestep.
         
@@ -147,7 +149,8 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=False):
             (count_rate_i, junk)        = np.histogram(timesteps_all,  bins) 
             met_i = hdulist['PRIMARY'].header['STARTMET'] + dt * np.array(range(num_samples))
                   
-        #    print "File " + os.path.basename(file) + ' : ' + repr(np.sum(count_rate_target_i)) + ' / ' + repr(np.sum(count_rate_i))
+        #    print "File " + os.path.basename(file) + ' : ' + repr(np.sum(count_rate_target_i)) + ' / ' + 
+        #       repr(np.sum(count_rate_i))
         
         # Now append these into the output lists
         
@@ -158,10 +161,11 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=False):
 
             hdulist.close()
 
-        count_rate_fits  = np.array([item for sublist in count_rate_fits_all for item in sublist])  # Flatten the count rate 
+        count_rate_fits  = np.array([item for sublist in count_rate_fits_all for item in sublist])  # Flatten count rate 
                                                                                                     # (from 2D, to 1D)
         count_rate_fits  = np.array(count_rate_fits, dtype=float)					           # Convert to float - 
-                                                                                                    # Otherwise get wraparound.
+                                                                                                    # Otherwise,
+                                                                                                    # get wraparound.
         
         count_rate  = np.array([item for sublist in count_rate_all for item in sublist])
         count_rate  = np.array(count_rate, dtype=float)					  
@@ -169,7 +173,7 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=False):
         count_rate_target  = np.array([item for sublist in count_rate_target_all for item in sublist]) 
         count_rate_target  = np.array(count_rate_target, dtype=float)					  
         
-        met         = np.array([item for sublist in met_all for item in sublist])         # Flatten the MET array  (from 2D, to 1D)
+        met         = np.array([item for sublist in met_all for item in sublist])   # Flatten the MET array from 2D to 1D
         met         = np.array(met, dtype=float)
     
     return (met, count_rate_target, count_rate, image_target_summed, image_summed)
@@ -186,12 +190,13 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=False):
 
 #sequence 	= 'O_RING_OC3'
 #sequence 	= 'O_RING_OC2'
-sequence   = 'STELLAROCC1'
+sequence   = 'STAROCC1'
 
 DO_ABBREVIATED = False       # For debugging. Just use a subset of the data?
 
 binning      = 25000		# Smoothing. 25000 is too much (shows opposite trend!). 5000 and 1000 look roughly similar.
-                            # To be meaningful, the binning timescale must be less than the deadband timescale (~20-30 sec RT).
+                            # To be meaningful, the binning timescale must be less than the deadband 
+                            #  timescale (~20-30 sec RT).
                             # At binning=3000, it's 12 sec... so that is the longest we'd really want to go.
                             #
                             # Use binning = 25,000 for the data analysis.
@@ -199,6 +204,7 @@ binning      = 25000		# Smoothing. 25000 is too much (shows opposite trend!). 50
                             
 fs           	= 15		# Font size
 plt.rc('image', interpolation='None')       # Turn of interpolation for imshow. Could also do hbt.set_plot_defaults()
+set_fontsize(fs)        # Set global matplotlib font size
 
 # Figure out the directory, stellar positions, etc. based on which sequence we are using
 
@@ -209,7 +215,7 @@ if (sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3'):
 if (sequence == 'O_RING_OC2'): 
     DO_HICAD = True             # Used hicad since that's where the data was when I grabbed it
     
-if (sequence == 'STELLAROCC1'):
+if (sequence == 'STAROCC1'):
     DO_HICAD = False
     xlim = np.array([370,910]) # Wavelength 
     ylim = np.array([10,13])    # Spatial, star #1, brighter, v = 4.9, and closer to lollipop
@@ -225,7 +231,7 @@ else:
     
 file_tm    = '/Users/throop/gv/dev/kernels/15sci_rhr_25aug16.tm' # Def need to use an encounter kernel here.
 
-cspice.furnsh(file_tm)
+sp.furnsh(file_tm)
 
 #########
 # Read the Alice data
@@ -248,7 +254,7 @@ print "Reading..."
 # a second time. Function could be rewritten to extract two stars at once, 
 # but that is a lot of work.
 
-if (sequence == 'STELLAROCC1'):
+if (sequence == 'STAROCC1'):
     print 'Reading star 2...'    
     (met, count_rate_target_2, count_rate_2, image_target_summed_2, image_summed) = \
         read_alice_occ_data(file_list, xlim, ylim_2, verbose=True, short=DO_ABBREVIATED)
@@ -268,15 +274,16 @@ plt.imshow(stretch(image_target_summed), aspect=10)
 plt.title(sequence + ', target')
 plt.show()
 
-if (sequence == 'STELLAROCC1'): # Plot second target as well, if we have it
+if (sequence == 'STAROCC1'): # Plot second target as well, if we have it
     plt.imshow(stretch(image_target_summed_2), aspect=10)
     plt.title(sequence + ', target #2')
     plt.show()
 
-    
 # Now start the analysis
 
 # Generate fake count rate data
+
+print("Generating fake data...")
  
 count_rate_target_fake = np.random.poisson(np.mean(count_rate_target), np.size(count_rate))
 count_rate_fake        = np.random.poisson(np.mean(count_rate), np.size(count_rate))
@@ -284,7 +291,7 @@ count_rate_fake        = np.random.poisson(np.mean(count_rate), np.size(count_ra
 # Compute UTC and ET for the initial timestep
 
 utc_start= hbt.met2utc(np.min(met)) # Crashes kernel
-et_start = cspice.utc2et(utc_start)
+et_start = sp.utc2et(utc_start)
 
 # Compute MET and ET for all timesteps. Both ET and MET are in seconds, but their offset is different.
 
@@ -301,14 +308,16 @@ num_dt   = np.size(et)
 
 # Get vector to star. 67 Ori = HR 2159 = HD 41753, a V=4.2 B3V. RA~91.89, Dec~14.77.
 
-print('computing boresight positions...')
-
+print('Computing boresight positions...')
 
 if (sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3'):
     pos_star_str = "06 07 34.326 +14 46 06.51"  # Vizier coords in FK5 = J2K
 
-if (sequence == 'STELLAROCC1'):
-    pos_star_str = "06 12 03.27955 +16 07 49.4614"  # Vizier coords in FK5 = J2K. 69 Ori, closer to lollipop 
+if (sequence == 'STAROCC1'):
+    pos_star_str = "06 12 03.27955 +16 07 49.4614"  # HD 42545, brighter, closer to lollipop.  
+    pos_star2_str= "06 15 25.12824 +16 08 35.4219"  # HD 42153, fainter,  closer to tip of stick
+    pos_star2 = SkyCoord(pos_star2_str, unit=(u.hourangle, u.deg))
+    vec_star2_j2k = sp.radrec(1, pos_star2.ra.rad, pos_star2.dec.rad)
          
 pos_star = SkyCoord(pos_star_str, unit=(u.hourangle, u.deg))
 ra_star  = pos_star.ra.rad
@@ -317,7 +326,7 @@ dec_star = pos_star.dec.rad
 ra       = np.zeros(num_dt)
 dec      = np.zeros(num_dt)
 
-vec_star_j2k = cspice.radrec(1., ra_star, dec_star)
+vec_star_j2k = sp.radrec(1., ra_star, dec_star)
 
 name_fov = 'NH_ALICE_AIRGLOW'
 
@@ -326,11 +335,13 @@ vec_bsight_alice = (-1, 0, 0)  # -X defines Alice SOC FOV
 vsep = np.zeros(np.size(et))
 
 for i,et_i in enumerate(et):
-  mx = cspice.pxform(name_fov, 'J2000', et[i])
-  vec_alice_j2k = cspice.mxvg(mx, vec_bsight_alice)		# ICY did not have mxvg(), but pdstools does.
-  vsep[i] = cspice.vsep(vec_star_j2k, vec_alice_j2k)   # Angular separation, in radians
+  mx = sp.pxform(name_fov, 'J2000', et[i])
+#  vec_alice_j2k = cspice.mxvg(mx, vec_bsight_alice)		# ICY did not have mxvg(), but pdstools does.
+  vec_alice_j2k = sp.mxvg(mx, vec_bsight_alice, 3, 3)		# ICY did not have mxvg(), but pdstools does.
 
-  (junk, ra[i], dec[i]) = cspice.recrad(vec_alice_j2k)
+  vsep[i] = sp.vsep(vec_star_j2k, vec_alice_j2k)   # Angular separation, in radians
+
+  (junk, ra[i], dec[i]) = sp.recrad(vec_alice_j2k)
 
 
 #==============================================================================
@@ -367,7 +378,7 @@ count_rate_fake_3000 = hbt.smooth_boxcar(count_rate_fake, 3000)
 count_rate_fake_30000 = hbt.smooth_boxcar(count_rate_fake, 30000)
 count_rate_target_fake_30000 = hbt.smooth_boxcar(count_rate_target_fake, 30000)
 
-if (sequence == 'STELLAROCC1'):
+if (sequence == 'STAROCC1'):
     
     count_rate_target_2_3000 = hbt.smooth_boxcar(count_rate_target_2, 3000)
 
@@ -393,11 +404,11 @@ sigma_s = np.mean(count_rate) * np.sqrt(np.mean(count_rate * binning)) / (np.mea
 
 print("Getting distance to Pluto...")
 
-plane_plu = cspice.nvp2pl([0,0,1], [0,0,0])    # nvp2pl: Normal Vec + Point to Plane
+plane_plu = sp.nvp2pl([0,0,1], [0,0,0])    # nvp2pl: Normal Vec + Point to Plane
 
 # Get vector from Pluto to star, in IAU_PLUTO. This will define the *vector* portion of the ray.
 
-vec_plu_star = cspice.radrec(1., ra_star, dec_star) # Vector from Pluto to star, in J2K
+vec_plu_star = sp.radrec(1., ra_star, dec_star) # Vector from Pluto to star, in J2K
 
 # Set the values of ET for which we look up the projected radius. We could do every ET, but that's pretty slow, and the 
 # behavior is essentially linear. So, we do the opposite extreme, which is just the starting and ending values.
@@ -416,25 +427,55 @@ for i,et_i in enumerate(et_vals):
 
 # Get vector from Pluto to S/C, in IAU_PLUTO. This will define the *point* (the ray is a point plus a vector)
 
-    (st_plu_sc_plu_i, lt_i) = cspice.spkezr('NEW_HORIZONS', et_i, 'IAU_PLUTO', 'LT+S', 'PLUTO BARYCENTER') # Need to change this to barycenter
+    (st_plu_sc_plu_i, lt_i) = sp.spkezr('NEW_HORIZONS', et_i, 'IAU_PLUTO', 'LT+S', 
+                                        'PLUTO BARYCENTER') # Need to change this to barycenter
     pt_plu_sc_plu_i = st_plu_sc_plu_i[0:3]
 
-    mx_i = cspice.pxform('J2000', 'IAU_PLUTO', et_i)
-    vec_plu_star_plu_i = cspice.mxvg(mx_i, vec_plu_star)
+    mx_i = sp.pxform('J2000', 'IAU_PLUTO', et_i)
+    vec_plu_star_plu_i = sp.mxvg(mx_i, vec_plu_star, 3, 3)
 
-# Now find the intersection. A ray is *not* a datatype. Instead, we just pass a point and a vector, and that defines the ray.
+# Now find the intersection. A ray is *not* a datatype. 
+# Instead, we just pass a point and a vector, and that defines the ray.
 # Point = vector from Pluto to NH in Pluto coords.
 # Vector = vector from Pluto star in Pluto coords
 
-    (npts, pt_intersect_plu_i) = cspice.inrypl(pt_plu_sc_plu_i, vec_plu_star_plu_i, plane_plu) # intersect ray and plane. Jup coords.
+    (npts, pt_intersect_plu_i) = sp.inrypl(pt_plu_sc_plu_i, vec_plu_star_plu_i, plane_plu) 
+                                                       # intersect ray and plane. Jup coords.
 
-    (radius_bary[i], lon[i], lat[i]) = cspice.reclat(pt_intersect_plu_i)  # Convert to lon/lat and distance from Pluto
+    (radius_bary[i], lon[i], lat[i]) = sp.reclat(pt_intersect_plu_i)  # Convert to lon/lat and distance from Pluto
 
+#==============================================================================
+# Compute angular distance from star to Pluto, for each timestep
+#==============================================================================
+
+if (sequence == 'STAROCC1'):
     
+    r_pluto_km = 1187
+    print("Computing angular distance to Pluto for both occ stars...")
+    ang_target_center   = np.zeros(num_dt)
+    ang_target_2_center = np.zeros(num_dt)
+    ang_target_limb     = np.zeros(num_dt)
+    ang_target_2_limb   = np.zeros(num_dt)
+    ang_target_center_radii = np.zeros(num_dt) # Center-to-center angle, in Pluto radii
+    ang_target_2_center_radii = np.zeros(num_dt)
+    
+    for i in range(num_dt):
+        (st_pl, lt) = sp.spkezr('Pluto', et[i], 'J2000', 'LT+S', 'New Horizons')
+        vec_pl_j2k = st_pl[0:3]
+
+        angle_radius_pluto =  (r_pluto_km / sp.vnorm(st_pl[0:3])) # Size in radians
+        
+        ang_target_center[i]   = sp.vsep(vec_pl_j2k, vec_star_j2k) # Angle in radians
+        ang_target_2_center[i] = sp.vsep(vec_pl_j2k, vec_star2_j2k)
+        ang_target_limb[i]     = ang_target_center[i] - angle_radius_pluto
+        ang_target_2_limb[i]   = ang_target_2_center[i] - angle_radius_pluto
+        ang_target_center_radii = ang_target_2
+        ang_target_center_radii[i] = ang_target_center[i] / angle_radius_pluto
+        ang_target_2_center_radii[i] = ang_target_2_center[i] / angle_radius_pluto
+ 
 #==============================================================================
 # Make a time-series plot of Counts vs. Time, for Target, Off-Target, Fake Data, etc.
 #==============================================================================
-
 
 # Plot of count rate vs. time
 
@@ -452,7 +493,6 @@ if (sequence == 'O_RING_OC3') or (sequence == 'O_RING_OC2'): # Complex plot -- d
         offset_total = 765
         offset_diff = 2630
     
-        
     binning = 30000
     
     do_fake = False
@@ -461,8 +501,10 @@ if (sequence == 'O_RING_OC3') or (sequence == 'O_RING_OC2'): # Complex plot -- d
     
     host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
     par = host.twiny()                           # Set up the parasite axis
-    plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction (like figure.figsize)
-    offset = 50                                  # How far away from the main plot the parasite axis is. Don't know the units.
+    plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
+                                                 #  (like figure.figsize)
+    offset = 50                                  # How far away from the main plot the parasite axis is. 
+                                                 #   Don't know the units.
     new_fixed_axis     = par.get_grid_helper().new_fixed_axis
     par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
                                             offset=(0,-offset))
@@ -470,24 +512,25 @@ if (sequence == 'O_RING_OC3') or (sequence == 'O_RING_OC2'): # Complex plot -- d
     par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
             
     p1, = host.plot(t, 1/dt * count_rate_target_30000, linewidth=0.5, ms=0.1, label='Alice, 67 Ori only')
-    host.plot(t, 1/dt * count_rate_30000 - offset_total,               marker = '.', linewidth=0.5, ms=0.1, label='Alice, Total [+offset]')
-    host.plot(t, 1/dt * count_rate_30000 - count_rate_target_30000/dt + offset_diff, linewidth=0.5, ms=0.1, label='Alice, Total - 67 Ori [+offset]')
-    plt.plot(t, 1/dt * count_rate_target_fake_30000 - offset_fake, linewidth=0.5, ms=0.1, label='Fake Poisson data [+offset]')
+    host.plot(t, 1/dt * count_rate_30000 - offset_total,               marker = '.', linewidth=0.5, 
+              ms=0.1, label='Alice, Total [+offset]')
+    host.plot(t, 1/dt * count_rate_30000 - count_rate_target_30000/dt + offset_diff, linewidth=0.5, 
+              ms=0.1, label='Alice, Total - 67 Ori [+offset]')
+    plt.plot(t, 1/dt * count_rate_target_fake_30000 - offset_fake, linewidth=0.5, ms=0.1, 
+             label='Fake Poisson data [+offset]')
     
-    plt.title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + repr(dt * binning) + ' sec', \
+    plt.title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + 
+                         repr(dt * binning) + ' sec', \
                          fontsize=fs)
     host.get_xaxis().get_major_formatter().set_useOffset(False)
-    
-    #plt.errorbar(200, np.mean(count_rate_target_3000) + 5 * sigma_s, xerr=binning*dt/2, yerr=None, label='Binning Width', linewidth=2) 
-    			# X 'error bar' -- show the bin width
-    #plt.errorbar(300, np.mean(count_rate_target_3000) + 5 * sigma_s, xerr=None, yerr=sigma_s/2, label='1$\sigma$ shot noise', linewidth=2) 
-    			# Y 'error bar' -- show the binned shot noise error
+
     plt.legend()
     plt.ylabel('Counts/sec (smoothed)', fontsize=fs)
     plt.xlabel('Time since ' + utc_start + ' [sec]', fontsize=fs)
     
     plt.xlim((t[binning], t[-binning])) # X limits for main plot. Remove transients at edges. 
-    par.set_xlim(radius_bary)               # X limits for parasite plot. *** This is slightly off, since I am ignoring edges above
+    par.set_xlim(radius_bary)               # X limits for parasite plot. 
+                                            # *** This is slightly off, since I am ignoring edges above
     par.set_xlabel('Distance from Pluto barycenter [km]', fontsize=fs)
     
     if (sequence == 'O_RING_OC3'):
@@ -498,24 +541,40 @@ if (sequence == 'O_RING_OC3') or (sequence == 'O_RING_OC2'): # Complex plot -- d
         
     plt.show()
 
-if (sequence == 'STELLAROCC1'):
-    plt.rcParams['figure.figsize'] = 15,5
-
-    plt.plot(t, 1/dt * count_rate_target_3000, label='Star #1')
-    plt.plot(t, 1/dt * count_rate_target_2_3000, label='Star #2 (occulted)')      
-    plt.plot(t, 1/dt * count_rate_3000, label = 'Total')
-    plt.xlabel('Time since ' + utc_start + ' [sec]', fontsize=fs)
-    plt.title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + repr(dt * binning) + ' sec', \
-                         fontsize=fs)  
-    plt.legend()
-    plt.show()
-
-#==============================================================================
-# For STELLAROCC1: make a plot of (distance to Pluto) vs (time) for each star    
-#==============================================================================
-
-if (sequence == 'STELLAROCC1'):
+if (sequence == 'STAROCC1'):
     
+        binning = 3000 
+        plt.rcParams['figure.figsize'] = 15,5
+    
+        fix, ax1 = plt.subplots()
+        ax2 = ax1.twinx()
+        
+        ax2.plot(t, ang_target_center_radii, linestyle = 'dashed', linewidth=2,
+                 label = 'Sep from Pluto Center, Star 1', color='blue')
+        ax2.plot(t, ang_target_2_center_radii, linestyle = 'dashed', linewidth=2,
+                 label = 'Sep from Pluto Center, Star 2', color='green')
+    
+        ax1.plot(t, 1/dt * count_rate_target_3000, label='Count Rate, Star 1', color='lightblue')
+        ax1.plot(t, 1/dt * count_rate_target_2_3000, label='Count Rate, Star 2', color='lightgreen')     
+        
+    #    ax1.plot(t, 1/dt * count_rate_3000, label = 'Total')
+        ax1.set_xlabel('Time since ' + utc_start + ' [sec]', fontsize=fs)
+        ax1.set_ylabel('Counts/sec')
+        ax1.set_title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + 
+                  repr(int(dt * binning)) + ' sec', fontsize=fs)
+    #    ax2.plot(t, ang_target_limb*hbt.r2d, linestyle = 'dashed', label = 'Angular Distance from Pluto Limb, Star 1')
+    #    ax2.plot(t, ang_target_2_limb*hbt.r2d, linestyle = 'dashed', label = 'Angular Distance from Pluto Limb, Star 2')
+    
+        ax2.set_ylabel('Pluto-Star Separation [$r_P$]')
+        ax1.legend(framealpha=0.8, loc='center left', fontsize=fs*0.7)
+        ax2.legend(framealpha=0.8, loc='center right',fontsize=fs*0.7)
+        ax1.set_xlim(np.array(hbt.mm(t)))
+        ax2.set_ylim([0.04, 5])
+        ax1.set_ylim([-290, 1400])
+        ax1.text(1000, 1050, 'Star 1 (HD 42545)')
+        ax1.text(7000, 100,    'Star 2 (HD 43153)')
+        plt.show()
+
 #==============================================================================
 # Make a plot of (angle from star) vs (time). This is a line-plot of thruster firings.
 #==============================================================================
@@ -531,14 +590,17 @@ plt.show()
 # Make a line plot of motion thru the deadband -- following the FOV thru every thruster firing
 #==============================================================================
 
+set_fontsize(9)
 plt.rcParams['figure.figsize'] = 5,5
 plt.plot(ra*hbt.r2d, dec*hbt.r2d, linestyle='none', marker='.', ms=1)
-plt.title(sequence + ', start = ' + utc_start)
+plt.title(sequence,fontsize=12)
 plt.xlabel('RA [deg]')
 plt.ylabel('Dec [deg]')
 ax = plt.gca()
 ax.ticklabel_format(useOffset=False)  # Turn off the 'offset' that matplotlib can use
 plt.show()
+
+set_fontsize(12)
 
 ## Now do some correlation between position and pointing, to see if there is anything I should unwrap there.
 #
@@ -550,7 +612,8 @@ plt.show()
 # This is to see if there is a trend in brightness as we move from one side of slit to the other.
 #==============================================================================
 
-ra_s = ra[binning:-binning]    # Same as RA, but cropped, so the edges are missing. Has same # elements as count_rate_s (smoothed)
+ra_s = ra[binning:-binning]    # Same as RA, but cropped, so edges missing. 
+                               # Has same # elements as count_rate_s (smoothed)
 dec_s = dec[binning:-binning]
 
 crop = 3000  # Don't plot quite at the start and end of array, to avoid transients
@@ -560,7 +623,8 @@ plt.rcParams['figure.figsize'] = 16,8
 plt.subplot(1,2,1)
 plt.rcParams['figure.figsize'] = 10,10
 plt.plot(ra[crop:-crop]*hbt.r2d, count_rate_target_3000[crop:-crop], linestyle='none', marker='.', ms=0.1)
-#plt.plot(ra[crop:-crop]*hbt.r2d, count_rate_nonlinear[crop:-crop] + np.mean(count_rate), color='red') # Add linear fit on top
+#plt.plot(ra[crop:-crop]*hbt.r2d, count_rate_nonlinear[crop:-crop] + 
+#         np.mean(count_rate), color='red') # Add linear fit on top
 plt.xlabel('RA [deg]', fontsize=fs)
 plt.title(sequence + ': DN vs. Position', fontsize=fs*1.5)
 ax = plt.gca()
@@ -577,12 +641,13 @@ ax.ticklabel_format(useOffset=False)
 plt.ylabel('DN (smoothed x ' + repr(crop) + ')', fontsize=fs)
 plt.show()
 
-if (sequence == 'STELLAROCC1'): # Made plot for first star above. Now do it for the second star
+if (sequence == 'STAROCC1'): # Made plot for first star above. Now do it for the second star
     plt.rcParams['figure.figsize'] = 16,8
     plt.subplot(1,2,1)
     plt.rcParams['figure.figsize'] = 10,10
     plt.plot(ra[crop:-crop]*hbt.r2d, count_rate_target_2_3000[crop:-crop], linestyle='none', marker='.', ms=0.1)
-    #plt.plot(ra[crop:-crop]*hbt.r2d, count_rate_nonlinear[crop:-crop] + np.mean(count_rate), color='red') # Add linear fit on top
+    #plt.plot(ra[crop:-crop]*hbt.r2d, count_rate_nonlinear[crop:-crop] + 
+    #         np.mean(count_rate), color='red') # Add linear fit on top
     plt.xlabel('RA [deg]', fontsize=fs)
     plt.title(sequence + ': DN vs. Position, #2', fontsize=fs*1.5)
     ax = plt.gca()
@@ -617,7 +682,7 @@ num_dy = num_dx
 ra_arr  = np.linspace(np.min(ra),  np.max(ra),  num_dx)
 dec_arr = np.linspace(np.min(dec), np.max(dec), num_dy)
 
-count_rate_s_arr = griddata((ra[crop:-crop], dec[crop:-crop]), count_rate_target_2_3000[crop:-crop], 
+count_rate_s_arr = griddata((ra[crop:-crop], dec[crop:-crop]), count_rate_target_3000[crop:-crop], 
                             (ra_arr[None,:], dec_arr[:,None]), method='cubic')
 
 # Make the plot, scaled vertically as per the sequence read in
@@ -626,7 +691,7 @@ if (sequence == 'O_RING_OC3'):
     plt.imshow(count_rate_s_arr, interpolation='none', vmin=13,vmax=14)
 if (sequence == 'O_RING_OC2'):
     plt.imshow(count_rate_s_arr, interpolation='none', vmin=16.4,vmax=16.8)
-if (sequence == 'STELLAROCC1'):
+if (sequence == 'STAROCC1'):
     plt.imshow(count_rate_s_arr, interpolation='none', vmin=3,vmax=6) # Star 1. Not a really useful plot, though.
     plt.imshow(count_rate_s_arr, interpolation='none', vmin=0,vmax=3) # Star 2
     
@@ -641,9 +706,9 @@ plt.show()
 # available here, but in 'analog' form rather than 'digital.'
 ####################
 
-# Just test one file for now
+# Just test one file (or file list) for now
 
-file = '/Users/throop/Data/NH_Alice_Ring/O_RING_OC3/data/pluto/level2/ali/all/ali_0299391413_0x4b5_sci_1.fit' # Or file_list[0]
+file = '/Users/throop/Data/NH_Alice_Ring/O_RING_OC3/data/pluto/level2/ali/all/ali_0299391413_0x4b5_sci_1.fit'
 
 # Open the file directly
 # Can use hdulist.info() to get a list of all the different fields available.
@@ -652,20 +717,25 @@ hdulist = fits.open(file)
         
 spect         = hdulist['PRIMARY'].data            # 32           x 1024              
 hk            = hdulist['HOUSEKEEPING_TABLE']
-pix           = hdulist['PIXEL_LIST_TABLE']          # A time-tagged list of every photon that has come in. 30883 x 5. columns X_INDEX, Y_INDEX, WAVELEN, TIMESTEP, MET.
-                                                     # During this 7-second observation, 30883 photons were received & counted.
+pix           = hdulist['PIXEL_LIST_TABLE']          # A time-tagged list of every photon that has come in. 
+                                                     # 30883 x 5. columns X_INDEX, Y_INDEX, WAVELEN, TIMESTEP, MET.
+                                                     # During this 7-second observation, 30883 photons were 
+                                                     # received & counted.
 
 timestep_list = pix.data['TIMESTEP']                 # Extract the list of 30883 timesteps.
 
-# Print a few fields from the HK data. However, these seem to be mostly flags and settings -- no real 'raw' data here useful for me.
-# This 'COUNT_RATE' field is a bit of a misnomer. I don't know what it is. It seems to be integrated over all bins or something.
+# Print a few fields from the HK data. However, these seem to be mostly flags and settings -- 
+# no real 'raw' data here useful for me.
+# This 'COUNT_RATE' field is a bit of a misnomer. I don't know what it is. It seems to be integrated 
+# over all bins or something.
 
 print 'Housekeeping: MET = ' + repr(int(hk.data['MET']))
 print 'Housekeeping: COUNT_RATE = ' + repr(int(hk.data['COUNT_RATE']))
 
 # Now try to extract the 'raw' data from the time-tagged pixel list.
 
-# First create bins -- one for each timestep, including start and end... so N+1 elements in this total. We feed this to histogram() to define the bins.
+# First create bins -- one for each timestep, including start and end... so N+1 elements in this total. 
+# We feed this to histogram() to define the bins.
 
 bins = hbt.frange(0, np.max(timestep_list)+1)
 
@@ -693,8 +763,8 @@ plt.rcParams['figure.figsize'] = 20,12
 
 host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
 par = host.twiny()                           # Set up the parasite axis
-plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction (like figure.figsize)
-offset = 50                                  # How far away from the main plot the parasite axis is. Don't know the units.
+plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
+offset = 50                                  # How far away from the main plot the parasite axis is.
 new_fixed_axis     = par.get_grid_helper().new_fixed_axis
 par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
                                     offset=(0,-offset))
@@ -742,8 +812,10 @@ if (sequence == 'O_RING_OC2'):
     
     host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
     par = host.twiny()                           # Set up the parasite axis
-    plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction (like figure.figsize)
-    offset = 50                                  # How far away from the main plot the parasite axis is. Don't know the units.
+    plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
+                                                 #  (~ figure.figsize)
+    offset = 50                                  # How far away from the main plot the parasite axis is. 
+                                                 #  Don't know units.
     new_fixed_axis     = par.get_grid_helper().new_fixed_axis
     par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
                                         offset=(0,-offset))
@@ -832,8 +904,8 @@ plt.show()
 # Calculate the Fresnel limit
 #==============================================================================
 
-(st, lt) = cspice.spkezr('NEW_HORIZONS', et[0], 'IAU_PLUTO', 'LT+S', 'PLUTO')
-dist = cspice.vnorm(st[0:3]) * u.km # Distance in km
+(st, lt) = sp.spkezr('NEW_HORIZONS', et[0], 'IAU_PLUTO', 'LT+S', 'PLUTO')
+dist = sp.vnorm(st[0:3]) * u.km # Distance in km
 alam = 100 * u.nm
 
 d_fresnel = np.sqrt(dist * alam/2).decompose()
