@@ -32,7 +32,6 @@ from   scipy.optimize import curve_fit
                        # Pylab defines the 'plot' command
 import spiceypy as sp # was cspice
 import skimage
-from   itertools import izip    # To loop over groups in a table -- see astropy tables docs
 from   astropy.wcs import WCS
 from   astropy.vo.client import conesearch # Virtual Observatory, ie star catalogs
 from   astropy import units as u           # Units library
@@ -56,12 +55,6 @@ import pickle # For load/save
 
 # Imports for Tk
 
-import Tkinter
-import ttk
-import tkMessageBox
-from   matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from   matplotlib.figure import Figure
-#import numericalunits as nu
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 
@@ -88,7 +81,7 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=False):
     # O_RING_OC2, O_RING_OC3
     
     if (True):
-        print "read_alice_occ_data: ylim = " + repr(ylim)
+        print("read_alice_occ_data: ylim = " + repr(ylim))
         
         image_target_summed = np.zeros((ylim[1]-ylim[0],xlim[1]-xlim[0])) 
                                             # The 2D extracted region of the full spectral-spatial array.
@@ -204,7 +197,8 @@ binning      = 25000		# Smoothing. 25000 is too much (shows opposite trend!). 50
                             
 fs           	= 15		# Font size
 plt.rc('image', interpolation='None')       # Turn of interpolation for imshow. Could also do hbt.set_plot_defaults()
-set_fontsize(fs)        # Set global matplotlib font size
+hbt.set_fontsize(fs)        # Set global matplotlib font size
+plt.set_cmap('plasma')
 
 # Figure out the directory, stellar positions, etc. based on which sequence we are using
 
@@ -239,8 +233,8 @@ sp.furnsh(file_tm)
 
 file_list = glob.glob(dir_images + '/*fit')
 
-print "Found {} Alice data files in {}".format(np.size(file_list), dir_images)
-print "Reading..."
+print("Found {} Alice data files in {}".format(np.size(file_list), dir_images))
+print("Reading...")
 
 # Read the entire Alice sequence. Extract the total count rate (across frame),
 # and count rate within a box defined by xlim, ylim.
@@ -255,7 +249,7 @@ print "Reading..."
 # but that is a lot of work.
 
 if (sequence == 'STAROCC1'):
-    print 'Reading star 2...'    
+    print('Reading star 2...')
     (met, count_rate_target_2, count_rate_2, image_target_summed_2, image_summed) = \
         read_alice_occ_data(file_list, xlim, ylim_2, verbose=True, short=DO_ABBREVIATED)
 
@@ -459,7 +453,7 @@ if (sequence == 'STAROCC1'):
     ang_target_center_radii = np.zeros(num_dt) # Center-to-center angle, in Pluto radii
     ang_target_2_center_radii = np.zeros(num_dt)
     
-    for i in range(num_dt):
+    for i in range(num_dt): # This loop is very slow. Like 20 minutes.
         (st_pl, lt) = sp.spkezr('Pluto', et[i], 'J2000', 'LT+S', 'New Horizons')
         vec_pl_j2k = st_pl[0:3]
 
@@ -469,10 +463,36 @@ if (sequence == 'STAROCC1'):
         ang_target_2_center[i] = sp.vsep(vec_pl_j2k, vec_star2_j2k)
         ang_target_limb[i]     = ang_target_center[i] - angle_radius_pluto
         ang_target_2_limb[i]   = ang_target_2_center[i] - angle_radius_pluto
-        ang_target_center_radii = ang_target_2
+        ang_target_center_radii = ang_target_2_center / angle_radius_pluto
         ang_target_center_radii[i] = ang_target_center[i] / angle_radius_pluto
         ang_target_2_center_radii[i] = ang_target_2_center[i] / angle_radius_pluto
- 
+
+
+#==============================================================================
+# For STAROCC1, do a polynomial fit to remove effect of motion within deadband
+#==============================================================================
+
+if (sequence == 'STAROCC1'):
+    
+    # For star 1, look at samples 0 .. 500K (ie, before the distance pluto appulse starts). 
+    # For these, do a polynomial fit between (dec) and (DN).
+    
+    y = count_rate_target_3000[0:500000] / 5.1 # y is defined as a normalization factor
+    x = dec[0:500000]
+    order = 5
+    poly = np.polyfit(x, y, order) # Get the coefficients
+    f_norm    = np.poly1d(poly) # Define a function of x. This is the normalization function,
+                                # so that (corrected flux) = (measured flux) / f_norm(dec)
+
+    # For star 2, look at samples from 1.1M to 2.0M -- the samples after the Pluto occ.
+    # Do fit between (dec) and (DN).
+
+    y = count_rate_target_2_3000[1100000:2000000] / 1.7 # y is defined as a normalization factor
+    x = dec[1100000:2000000]
+    order = 5
+    poly_2 = np.polyfit(x, y, order)
+    f_2_norm    = np.poly1d(poly_2)
+    
 #==============================================================================
 # Make a time-series plot of Counts vs. Time, for Target, Off-Target, Fake Data, etc.
 #==============================================================================
@@ -544,6 +564,7 @@ if (sequence == 'O_RING_OC3') or (sequence == 'O_RING_OC2'): # Complex plot -- d
 if (sequence == 'STAROCC1'):
     
         binning = 3000 
+        DO_NORMALIZED = True
         plt.rcParams['figure.figsize'] = 15,5
     
         fix, ax1 = plt.subplots()
@@ -555,15 +576,21 @@ if (sequence == 'STAROCC1'):
                  label = 'Sep from Pluto Center, Star 2', color='green')
     
         ax1.plot(t, 1/dt * count_rate_target_3000, label='Count Rate, Star 1', color='lightblue')
-        ax1.plot(t, 1/dt * count_rate_target_2_3000, label='Count Rate, Star 2', color='lightgreen')     
+        if (DO_NORMALIZED):
+            ax1.plot(t, 1/dt * count_rate_target_3000 /f_norm(dec), label='Count Rate, Star 1', color='darkblue')
         
-    #    ax1.plot(t, 1/dt * count_rate_3000, label = 'Total')
+        ax1.plot(t, 1/dt * count_rate_target_2_3000, label='Count Rate Norm, Star 2', color='lightgreen')     
+        if (DO_NORMALIZED):
+            x1 = 850000
+            ax1.plot(t[0:x1], 1/dt * count_rate_target_2_3000[0:x1], 
+                     label='Count Rate Norm, Star 2', color='darkgreen')
+            ax1.plot(t[x1:], 1/dt * count_rate_target_2_3000[x1:] / f_2_norm(dec[x1:]), color='darkgreen')     
+        
+        
         ax1.set_xlabel('Time since ' + utc_start + ' [sec]', fontsize=fs)
         ax1.set_ylabel('Counts/sec')
         ax1.set_title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + 
                   repr(int(dt * binning)) + ' sec', fontsize=fs)
-    #    ax2.plot(t, ang_target_limb*hbt.r2d, linestyle = 'dashed', label = 'Angular Distance from Pluto Limb, Star 1')
-    #    ax2.plot(t, ang_target_2_limb*hbt.r2d, linestyle = 'dashed', label = 'Angular Distance from Pluto Limb, Star 2')
     
         ax2.set_ylabel('Pluto-Star Separation [$r_P$]')
         ax1.legend(framealpha=0.8, loc='center left', fontsize=fs*0.7)
@@ -590,7 +617,7 @@ plt.show()
 # Make a line plot of motion thru the deadband -- following the FOV thru every thruster firing
 #==============================================================================
 
-set_fontsize(9)
+hbt.set_fontsize(9)
 plt.rcParams['figure.figsize'] = 5,5
 plt.plot(ra*hbt.r2d, dec*hbt.r2d, linestyle='none', marker='.', ms=1)
 plt.title(sequence,fontsize=12)
@@ -600,7 +627,7 @@ ax = plt.gca()
 ax.ticklabel_format(useOffset=False)  # Turn off the 'offset' that matplotlib can use
 plt.show()
 
-set_fontsize(12)
+hbt.set_fontsize(12)
 
 ## Now do some correlation between position and pointing, to see if there is anything I should unwrap there.
 #
@@ -663,7 +690,10 @@ if (sequence == 'STAROCC1'): # Made plot for first star above. Now do it for the
     ax.ticklabel_format(useOffset=False)
     plt.ylabel('DN (smoothed x ' + repr(crop) + ')', fontsize=fs)
     plt.show()
+ 
+
     
+
 #==============================================================================
 # Regrid the data, and make a plot of the actual spatial variation.
 # This is similar to plots above, but in a color image.
@@ -729,8 +759,8 @@ timestep_list = pix.data['TIMESTEP']                 # Extract the list of 30883
 # This 'COUNT_RATE' field is a bit of a misnomer. I don't know what it is. It seems to be integrated 
 # over all bins or something.
 
-print 'Housekeeping: MET = ' + repr(int(hk.data['MET']))
-print 'Housekeeping: COUNT_RATE = ' + repr(int(hk.data['COUNT_RATE']))
+print('Housekeeping: MET = ' + repr(int(hk.data['MET'])))
+print('Housekeeping: COUNT_RATE = ' + repr(int(hk.data['COUNT_RATE'])))
 
 # Now try to extract the 'raw' data from the time-tagged pixel list.
 
@@ -870,8 +900,8 @@ if (sequence == 'O_RING_OC2'):
     depth_5 = 3400-2000
     depth_30 = 3400 - 2800
     
-    print "At binning = 5, depth = " + repr(depth_5) + " = " + repr(depth_5 / std_5) + " sigma"
-    print "At binning = 30, depth = " + repr(depth_30) + " = " + repr(depth_30 / std_30) + " sigma"
+    print("At binning = 5, depth = " + repr(depth_5) + " = " + repr(depth_5 / std_5) + " sigma")
+    print("At binning = 30, depth = " + repr(depth_30) + " = " + repr(depth_30 / std_30) + " sigma")
     
 #==============================================================================
 # Do a histogram of the count rate
@@ -909,7 +939,7 @@ dist = sp.vnorm(st[0:3]) * u.km # Distance in km
 alam = 100 * u.nm
 
 d_fresnel = np.sqrt(dist * alam/2).decompose()
-print "Fresnel scale = " + repr(d_fresnel)
+print("Fresnel scale = " + repr(d_fresnel))
 
 #==============================================================================
 # Make a binned plot right at the fresnel limit
