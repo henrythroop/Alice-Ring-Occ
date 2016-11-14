@@ -445,16 +445,25 @@ for i,et_i in enumerate(et_vals):
 if (sequence == 'STAROCC1'):
     
     r_pluto_km = 1187
-    print("Computing angular distance to Pluto for both occ stars...")
-    ang_target_center   = np.zeros(num_dt)
-    ang_target_2_center = np.zeros(num_dt)
-    ang_target_limb     = np.zeros(num_dt)
-    ang_target_2_limb   = np.zeros(num_dt)
-    ang_target_center_radii = np.zeros(num_dt) # Center-to-center angle, in Pluto radii
-    ang_target_2_center_radii = np.zeros(num_dt)
     
-    for i in range(num_dt): # This loop is very slow. Like 20 minutes.
-        (st_pl, lt) = sp.spkezr('Pluto', et[i], 'J2000', 'LT+S', 'New Horizons')
+    # Loop over every point in scan, and do some geometry.
+    # But, SPICE calcs here are very slow, and the curves are smooth. It takes > 1 hour to do all
+    # the calcs explicitly. Though I don't do it much, here we just sample it at low-res, and that's fine.
+    
+    skip = 1000 # Pick one element every 'skip' points to keep.
+    t_skip = t[::skip]
+    num_dt_skip = np.size(t_skip)
+    
+    print("Computing angular distance to Pluto for both occ stars...")
+    ang_target_center   = np.zeros(num_dt_skip)
+    ang_target_2_center = np.zeros(num_dt_skip)
+    ang_target_limb     = np.zeros(num_dt_skip)
+    ang_target_2_limb   = np.zeros(num_dt_skip)
+    ang_target_center_radii = np.zeros(num_dt_skip) # Center-to-center angle, in Pluto radii
+    ang_target_2_center_radii = np.zeros(num_dt_skip)
+    
+    for i in range(num_dt_skip): # This loop is very slow. Like 20 minutes.
+        (st_pl, lt) = sp.spkezr('Pluto', et[i*skip], 'J2000', 'LT+S', 'New Horizons')
         vec_pl_j2k = st_pl[0:3]
 
         angle_radius_pluto =  (r_pluto_km / sp.vnorm(st_pl[0:3])) # Size in radians
@@ -463,10 +472,9 @@ if (sequence == 'STAROCC1'):
         ang_target_2_center[i] = sp.vsep(vec_pl_j2k, vec_star2_j2k)
         ang_target_limb[i]     = ang_target_center[i] - angle_radius_pluto
         ang_target_2_limb[i]   = ang_target_2_center[i] - angle_radius_pluto
-        ang_target_center_radii = ang_target_2_center / angle_radius_pluto
+        ang_target_center_radii = ang_target_center / angle_radius_pluto
         ang_target_center_radii[i] = ang_target_center[i] / angle_radius_pluto
         ang_target_2_center_radii[i] = ang_target_2_center[i] / angle_radius_pluto
-
 
 #==============================================================================
 # For STAROCC1, do a polynomial fit to remove effect of motion within deadband
@@ -564,44 +572,112 @@ if (sequence == 'O_RING_OC3') or (sequence == 'O_RING_OC2'): # Complex plot -- d
 if (sequence == 'STAROCC1'):
     
         binning = 3000 
-        DO_NORMALIZED = True
+        DO_PLOT_NORMALIZED = True
+        DO_PLOT_RAW = True
+          
         plt.rcParams['figure.figsize'] = 15,5
     
         fix, ax1 = plt.subplots()
-        ax2 = ax1.twinx()
         
-        ax2.plot(t, ang_target_center_radii, linestyle = 'dashed', linewidth=2,
-                 label = 'Sep from Pluto Center, Star 1', color='blue')
-        ax2.plot(t, ang_target_2_center_radii, linestyle = 'dashed', linewidth=2,
-                 label = 'Sep from Pluto Center, Star 2', color='green')
+#        ax2 = ax1.twinx()
+#        
+#        ax2.plot(t_skip, ang_target_center_radii, linestyle = 'dashed', linewidth=2,
+#                 label = 'Sep from Pluto Center, Star 1', color='blue')
+#        ax2.plot(t_skip, ang_target_2_center_radii, linestyle = 'dashed', linewidth=2,
+#                 label = 'Sep from Pluto Center, Star 2', color='green')
     
-        ax1.plot(t, 1/dt * count_rate_target_3000, label='Count Rate, Star 1', color='lightblue')
-        if (DO_NORMALIZED):
+        if (DO_PLOT_RAW):
+            ax1.plot(t, 1/dt * count_rate_target_3000, label='Count Rate, Star 1', color='lightblue')
+        
+        if (DO_PLOT_NORMALIZED):
             ax1.plot(t, 1/dt * count_rate_target_3000 /f_norm(dec), label='Count Rate, Star 1', color='darkblue')
         
-        ax1.plot(t, 1/dt * count_rate_target_2_3000, label='Count Rate Norm, Star 2', color='lightgreen')     
-        if (DO_NORMALIZED):
+        if (DO_PLOT_RAW):
+            ax1.plot(t, 1/dt * count_rate_target_2_3000, label='Count Rate Fixed, Star 2', color='lightgreen')     
+            
+        if (DO_PLOT_NORMALIZED):
             x1 = 850000
             ax1.plot(t[0:x1], 1/dt * count_rate_target_2_3000[0:x1], 
-                     label='Count Rate Norm, Star 2', color='darkgreen')
+                     label='Count Rate Fixed, Star 2', color='darkgreen')
             ax1.plot(t[x1:], 1/dt * count_rate_target_2_3000[x1:] / f_2_norm(dec[x1:]), color='darkgreen')     
-        
-        
+            
         ax1.set_xlabel('Time since ' + utc_start + ' [sec]', fontsize=fs)
         ax1.set_ylabel('Counts/sec')
         ax1.set_title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + 
                   repr(int(dt * binning)) + ' sec', fontsize=fs)
     
-        ax2.set_ylabel('Pluto-Star Separation [$r_P$]')
+#        ax2.set_ylabel('Pluto-Star Separation [$r_P$]')
         ax1.legend(framealpha=0.8, loc='center left', fontsize=fs*0.7)
-        ax2.legend(framealpha=0.8, loc='center right',fontsize=fs*0.7)
+#        ax2.legend(framealpha=0.8, loc='center right',fontsize=fs*0.7)
         ax1.set_xlim(np.array(hbt.mm(t)))
-        ax2.set_ylim([0.04, 5])
+#        ax2.set_ylim([0.04, 5])
         ax1.set_ylim([-290, 1400])
         ax1.text(1000, 1050, 'Star 1 (HD 42545)')
         ax1.text(7000, 100,    'Star 2 (HD 43153)')
         plt.show()
 
+        # 
+        # Now make a second set of plots -- split into two, for clarity.
+        #
+        
+        # Plot 1 (Star 1)
+        vel = 6 * r_pluto_km / (np.amax(t) - np.amin(t)) # Velocity is not constant, but this is ballpark km/sec
+ 
+        hbt.figsize((15,3))
+        
+        fix, ax1 = plt.subplots()
+        ax2 = ax1.twinx()
+        ax2.plot(t_skip, ang_target_center_radii, linestyle = 'dashed', linewidth=2,
+                 label = 'Sep from Pluto Center', color='blue') 
+        
+        ax1.plot(t, 1/dt * count_rate_target_3000 /f_norm(dec), label='Count Rate, Fixed', color='darkblue')
+        
+        ax1.set_ylabel('Counts/sec')
+        ax1.set_ylabel('Counts/sec')
+        ax1.set_title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + 
+                  repr(int(dt * binning)) + ' sec', fontsize=fs)
+    
+        ax1.text(100, 1110, 'HD 42545, v = {:4.2f} km/sec'.format(vel))
+        ax2.set_ylabel('Pluto-Star Separation [$r_P$]')
+        ax1.legend(framealpha=0.8, loc='upper left', fontsize=fs*0.7)
+        ax2.legend(framealpha=0.8, loc='lower right',fontsize=fs*0.7)
+        ax1.set_xlim(np.array(hbt.mm(t)))
+        ax2.set_ylim([0, 10])
+        ax1.set_ylim([1000, 1400])
+        ax1.axes.get_xaxis().set_ticks([])
+        plt.show()
+
+        # Plot 2 (Star 2)
+        
+        vel_2 = 4 * r_pluto_km / (np.amax(t) - np.amin(t)) # Velocity is not constant, but this is ballpark km/sec
+        
+        fix, ax1 = plt.subplots()
+        ax2 = ax1.twinx()
+        ax2.plot(t_skip, ang_target_2_center_radii, linestyle = 'dashed', linewidth=2,
+                 label = 'Sep from Pluto Center', color='green') 
+
+        x1 = 850000 # Leftward of this x value, plot the non-fixed count rate (ie, in the occultation).
+                    # Rightward of this x value, plot the fixed count rate
+                    
+        ax1.plot(t[0:x1], 1/dt * count_rate_target_2_3000[0:x1], 
+                     label='Count Rate, Fixed', color='darkgreen')
+        ax1.plot(t[x1:], 1/dt * count_rate_target_2_3000[x1:] / f_2_norm(dec[x1:]), color='darkgreen')     
+                    
+        ax1.set_ylabel('Counts/sec')
+        ax1.set_xlabel('Time since ' + utc_start + ' [sec]', fontsize=fs)
+        ax1.set_ylabel('Counts/sec')
+
+        ax1.text(100, 200, 'HD 43153, {:4.2f} km/sec'.format(vel_2))
+        ax2.set_ylabel('Pluto-Star Separation [$r_P$]')
+        ax1.legend(framealpha=0.8, loc='upper left', fontsize=fs*0.7)
+        ax2.legend(framealpha=0.8, loc='lower right',fontsize=fs*0.7)
+        ax1.set_xlim(np.array(hbt.mm(t)))
+        ax2.set_ylim([0.2, 6])
+        ax1.set_ylim([000, 500])
+        plt.show()
+        
+        
+        
 #==============================================================================
 # Make a plot of (angle from star) vs (time). This is a line-plot of thruster firings.
 #==============================================================================
