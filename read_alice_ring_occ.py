@@ -341,11 +341,49 @@ for i,et_i in enumerate(et):
 #==============================================================================
 # Use linear fit to compute correlation between count rate and RA / Dec
 #==============================================================================
+
+# I think this is not used any more??
   
 coeffs_ra   = linregress(ra, count_rate)
 coeffs_dec  = linregress(dec, count_rate)
 count_rate_nonlinear = coeffs_ra.intercept + coeffs_ra.slope * ra - np.mean(count_rate)
 count_rate_fixed     = count_rate - count_rate_nonlinear 
+
+#==============================================================================
+# For STAROCC1, do a polynomial fit to remove effect of motion within deadband
+#==============================================================================
+
+if (sequence == 'STAROCC1'):
+
+    count_rate_target_3000 = hbt.smooth_boxcar(count_rate_target, 3000)
+    count_rate_target_2_3000 = hbt.smooth_boxcar(count_rate_target_2, 3000)
+    
+    # For star 1, look at samples 0 .. 500K (ie, before the distance pluto appulse starts). 
+    # For these, do a polynomial fit between (dec) and (DN).
+    
+    y = count_rate_target_3000[0:500000] / 5.1 # y is defined as a normalization factor
+    x = dec[0:500000]
+    order = 5
+    poly = np.polyfit(x, y, order) # Get the coefficients
+    f_norm    = np.poly1d(poly) # Define a function of x. This is the normalization function,
+                                # so that (corrected flux) = (measured flux) / f_norm(dec)
+
+    count_rate_target_fixed = count_rate_target / f_norm(dec)
+                              
+    # For star 2, look at samples from 1.1M to 2.0M -- the samples after the Pluto occ.
+    # Do fit between (dec) and (DN).
+
+    y = count_rate_target_2_3000[1100000:2000000] / 1.7 # y is defined as a normalization factor
+    x = dec[1100000:2000000]
+    order = 5
+    poly_2 = np.polyfit(x, y, order)
+    f_2_norm    = np.poly1d(poly_2)
+    
+    x1 = 850000 # Approximate end of occultation. Use the 'fixed' data afer this,
+                # and the raw data before it (since during occultation, there is no deadband effect)
+    
+    count_rate_target_2_fixed = count_rate_target_2 / f_2_norm(dec)
+    count_rate_target_2_fixed[0:x1] = count_rate_target_2[0:x1]          
 
 #==============================================================================
 # Smooth the data at several different binnings
@@ -381,6 +419,20 @@ if (sequence == 'STAROCC1'): # Do statistics for second star in the aperture
     count_rate_target_2_5 = hbt.smooth_boxcar(count_rate_target_2, 5)
     count_rate_target_2_3 = hbt.smooth_boxcar(count_rate_target_2, 3)
 
+    count_rate_target_fixed_30000 = hbt.smooth_boxcar(count_rate_target_fixed, 30000)
+    count_rate_target_fixed_3000 = hbt.smooth_boxcar(count_rate_target_fixed, 3000)
+    count_rate_target_fixed_300 = hbt.smooth_boxcar(count_rate_target_fixed, 300)
+    count_rate_target_fixed_30 = hbt.smooth_boxcar(count_rate_target_fixed, 30)
+    count_rate_target_fixed_5 = hbt.smooth_boxcar(count_rate_target_fixed, 5)
+    count_rate_target_fixed_3 = hbt.smooth_boxcar(count_rate_target_fixed, 3)
+
+    count_rate_target_2_fixed_30000 = hbt.smooth_boxcar(count_rate_target_2_fixed, 30000)
+    count_rate_target_2_fixed_3000 = hbt.smooth_boxcar(count_rate_target_2_fixed, 3000)
+    count_rate_target_2_fixed_300 = hbt.smooth_boxcar(count_rate_target_2_fixed, 300)
+    count_rate_target_2_fixed_30 = hbt.smooth_boxcar(count_rate_target_2_fixed, 30)
+    count_rate_target_2_fixed_5 = hbt.smooth_boxcar(count_rate_target_2_fixed, 5)
+    count_rate_target_2_fixed_3 = hbt.smooth_boxcar(count_rate_target_2_fixed, 3)
+    
 ##########
 # Calculate statistics
 ##########
@@ -480,31 +532,7 @@ if (sequence == 'STAROCC1'):
         ang_target_center_radii = ang_target_center / angle_radius_pluto
         ang_target_center_radii[i] = ang_target_center[i] / angle_radius_pluto
         ang_target_2_center_radii[i] = ang_target_2_center[i] / angle_radius_pluto
-
-#==============================================================================
-# For STAROCC1, do a polynomial fit to remove effect of motion within deadband
-#==============================================================================
-
-if (sequence == 'STAROCC1'):
-    
-    # For star 1, look at samples 0 .. 500K (ie, before the distance pluto appulse starts). 
-    # For these, do a polynomial fit between (dec) and (DN).
-    
-    y = count_rate_target_3000[0:500000] / 5.1 # y is defined as a normalization factor
-    x = dec[0:500000]
-    order = 5
-    poly = np.polyfit(x, y, order) # Get the coefficients
-    f_norm    = np.poly1d(poly) # Define a function of x. This is the normalization function,
-                                # so that (corrected flux) = (measured flux) / f_norm(dec)
-
-    # For star 2, look at samples from 1.1M to 2.0M -- the samples after the Pluto occ.
-    # Do fit between (dec) and (DN).
-
-    y = count_rate_target_2_3000[1100000:2000000] / 1.7 # y is defined as a normalization factor
-    x = dec[1100000:2000000]
-    order = 5
-    poly_2 = np.polyfit(x, y, order)
-    f_2_norm    = np.poly1d(poly_2)
+            
     
 #==============================================================================
 # Make a time-series plot of Counts vs. Time, for Target, Off-Target, Fake Data, etc.
@@ -710,11 +738,6 @@ plt.show()
 
 hbt.set_fontsize(12)
 
-## Now do some correlation between position and pointing, to see if there is anything I should unwrap there.
-#
-# Concl: there is quite a bit of trend across the detector. So, a lot of the variation I'm seeing
-# in DN value is probably not due to statistics, but due to sensitivity across the detector.
-
 #==============================================================================
 # Make a plot of RA vs DN. 
 # This is to see if there is a trend in brightness as we move from one side of slit to the other.
@@ -762,18 +785,16 @@ if (sequence == 'STAROCC1'): # Made plot for first star above. Now do it for the
     ax.ticklabel_format(useOffset=False)
     plt.ylabel('DN (smoothed x ' + repr(crop) + ')', fontsize=fs)
     
-    plt.subplot(1,2,2)
+    plt.subplot(1,2,2) # Plot DN vs. Position. Exclude the occultation, so only take a subset of the data.
     plt.rcParams['figure.figsize'] = 10,10
-    plt.plot(dec[crop:-crop]*hbt.r2d, count_rate_target_2_3000[crop:-crop], linestyle='none', marker='.', ms=0.1)
+    plt.plot(dec[1200000:2000000]*hbt.r2d, count_rate_target_2_3000[1200000:2000000], 
+             linestyle='none', marker='.', ms=0.1)
     plt.xlabel('Dec [deg]', fontsize=fs)
     plt.title(sequence + ': DN vs. Position, #2', fontsize=fs*1.5)
     ax = plt.gca()
     ax.ticklabel_format(useOffset=False)
     plt.ylabel('DN (smoothed x ' + repr(crop) + ')', fontsize=fs)
     plt.show()
- 
-
-    
 
 #==============================================================================
 # Regrid the data, and make a plot of the actual spatial variation.
@@ -866,51 +887,148 @@ hk.data
 # Now make a time-series plot, but with several binning widths. To look for narrow rings.
 #==============================================================================
 
-plt.rcParams['figure.figsize'] = 20,12
-#plt.rcParams['figure.figsize'] = 10,6
+if ((sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3')):
+    
+    plt.rcParams['figure.figsize'] = 20,12
+    #plt.rcParams['figure.figsize'] = 10,6
+    
+    #fs = 25
+    # Jump through some hoops to place a second x-axis here: et vs. radius_pluto
+    
+    host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
+    par = host.twiny()                           # Set up the parasite axis
+    plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
+    offset = 50                                  # How far away from the main plot the parasite axis is.
+    new_fixed_axis     = par.get_grid_helper().new_fixed_axis
+    par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
+                                        offset=(0,-offset))
+    par.axis["bottom"].toggle(all=True)          # Make sure the bottom axis is displayed
+    par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
+    
+    p1, = host.plot(t, count_rate_target/dt, ms=0.1, linestyle='none', marker='.', color='orange', 
+             label = 'Alice, raw, ' + repr(dt) + ' sec = 1.5 m [orange]')
+    
+    host.plot(t, count_rate_target_30/dt, linestyle='none', marker='.', linewidth=0.1, ms=1, color='green', 
+             label='Alice, smoothed 30 bins = ' + repr(30*dt) + ' sec = 40 m [green]' )
+    
+    host.plot(t, count_rate_target_300/dt, linewidth=0.1, ms=0.1, color='blue', 
+             label='Alice, smoothed 300 bins = ' + repr(300*dt) + ' sec = 0.4 km [blue]')
+    
+    host.plot(t, count_rate_target_3000/dt, linewidth=0.3, ms=0.1, color='red', 
+             label='Alice, smoothed 3000 bins = ' + repr(3000*dt) + ' sec = 4 km [red]')
+    
+    host.plot(t, count_rate_target_30000/dt, linewidth=0.2, ms=0.1, color='yellow', 
+             label='Alice, smoothed 30000 bins = ' + repr(30000 * dt) + 
+             ' sec = 40 km [yellow]' )
+    
+    #host.set_ylim((2800,4000))
+    host.set_ylim((2500,4200))
+    plt.xlim(hbt.mm(t))
+    #plt.xlim((1750,1850))
+    par.set_xlim(hbt.mm(radius_bary))
+    plt.title(sequence, fontsize=fs)
+    plt.ylabel('Counts/sec', fontsize=fs) # Fontsize is ignored here, probably because of the twin-axis thing...
+    plt.xlabel('Seconds since ' + utc_start, fontsize=fs)
+    par.set_xlabel('Distance from Pluto barycenter [km]', fontsize=fs)
+    
+    plt.legend()
+    plt.show()
 
-#fs = 25
-# Jump through some hoops to place a second x-axis here: et vs. radius_pluto
+if (sequence == 'STAROCC1'):
 
-host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
-par = host.twiny()                           # Set up the parasite axis
-plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
-offset = 50                                  # How far away from the main plot the parasite axis is.
-new_fixed_axis     = par.get_grid_helper().new_fixed_axis
-par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
-                                    offset=(0,-offset))
-par.axis["bottom"].toggle(all=True)          # Make sure the bottom axis is displayed
-par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
+    fs = 18
+    plt.rcParams['figure.figsize'] = 17,8
+    hbt.set_fontsize(size=fs)
 
-p1, = host.plot(t, count_rate_target/dt, ms=0.1, linestyle='none', marker='.', color='orange', 
-         label = 'Alice, raw, ' + repr(dt) + ' sec = 1.5 m [orange]')
 
-host.plot(t, count_rate_target_30/dt, linestyle='none', marker='.', linewidth=0.1, ms=1, color='green', 
-         label='Alice, smoothed 30 bins = ' + repr(30*dt) + ' sec = 40 m [green]' )
+    v = 0.79  # km/sec, star 1
+    
+    # Jump through some hoops to place a second x-axis here: et vs. radius_pluto
+    
+    host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
+#    par = host.twiny()                           # Set up the parasite axis
+    plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
+    offset = 50                                  # How far away from the main plot the parasite axis is.
+    new_fixed_axis     = par.get_grid_helper().new_fixed_axis
+    par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
+                                        offset=(0,-offset))
+    par.axis["bottom"].toggle(all=True)          # Make sure the bottom axis is displayed
+    par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
+    
+    p1, = host.plot(t, count_rate_target/dt, ms=0.1, linestyle='none', marker='.', color='orange', 
+             label = 'Alice, raw, ' + repr(dt) + ' sec = 3 m [orange]')
+    
+    host.plot(t, count_rate_target_fixed_30/dt, linestyle='none', marker='.', linewidth=0.1, ms=1, color='green', 
+             label='Alice, smoothed 30 bins = ' + repr(30*dt) + ' sec = 100 m [green]' )
+    
+    host.plot(t, count_rate_target_fixed_300/dt, linewidth=0.1, ms=0.1, color='blue', 
+             label='Alice, smoothed 300 bins = ' + repr(300*dt) + ' sec = 1 km [blue]')
+    
+    host.plot(t, count_rate_target_fixed_3000/dt, linewidth=0.3, ms=0.1, color='red', 
+             label='Alice, smoothed 3000 bins = ' + repr(3000*dt) + ' sec = 10 km [red]')
+    
+    host.plot(t, count_rate_target_fixed_30000/dt, linewidth=0.2, ms=0.1, color='yellow', 
+             label='Alice, smoothed 30000 bins = ' + repr(30000 * dt) + 
+             ' sec = 100 km [yellow]' )
+    
+    #host.set_ylim((2800,4000))
+    host.set_ylim((500,1600))
+    
+    plt.xlim(hbt.mm(t))
+    #plt.xlim((1750,1850))
+#    par.set_xlim(hbt.mm(radius_bary))
+#    plt.title(sequence + ", HD 42545", fontsize=fs)
+    plt.text(4500, 1500, "HD 42545", fontsize=fs*1.4) 
 
-host.plot(t, count_rate_target_300/dt, linewidth=0.1, ms=0.1, color='blue', 
-         label='Alice, smoothed 300 bins = ' + repr(300*dt) + ' sec = 0.4 km [blue]')
+    plt.ylabel('Counts/sec', fontsize=fs) # Fontsize is ignored here, probably because of the twin-axis thing...
+    plt.xlabel('Seconds since ' + utc_start, fontsize=fs)
+#    par.set_xlabel('Distance from Pluto barycenter [km]', fontsize=fs)
+    
+    plt.legend(framealpha=0.8, loc='lower left', fontsize=fs*0.75)
+    plt.show()
 
-host.plot(t, count_rate_target_3000/dt, linewidth=0.3, ms=0.1, color='red', 
-         label='Alice, smoothed 3000 bins = ' + repr(3000*dt) + ' sec = 4 km [red]')
 
-host.plot(t, count_rate_target_30000/dt, linewidth=0.2, ms=0.1, color='yellow', 
-         label='Alice, smoothed 30000 bins = ' + repr(30000 * dt) + 
-         ' sec = 40 km [yellow]' )
+#
 
-#host.set_ylim((2800,4000))
-host.set_ylim((2500,4200))
-plt.xlim(hbt.mm(t))
-#plt.xlim((1750,1850))
-par.set_xlim(hbt.mm(radius_bary))
-plt.title(sequence, fontsize=fs)
-plt.ylabel('Counts/sec', fontsize=fs) # Fontsize is ignored here, probably because of the twin-axis thing...
-plt.xlabel('Seconds since ' + utc_start, fontsize=fs)
-par.set_xlabel('Distance from Pluto barycenter [km]', fontsize=fs)
 
-plt.legend()
-plt.show()
- 
+
+    v = 0.53  # km/sec, star 2
+    host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
+    plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
+    offset = 50                                  # How far away from the main plot the parasite axis is.
+    new_fixed_axis     = par.get_grid_helper().new_fixed_axis
+    par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
+                                        offset=(0,-offset))
+    par.axis["bottom"].toggle(all=True)          # Make sure the bottom axis is displayed
+    par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
+    
+    p1, = host.plot(t, count_rate_target_2/dt, ms=0.1, linestyle='none', marker='.', color='orange', 
+             label = 'Alice, raw, ' + repr(dt) + ' sec = 2 m [orange]')
+    
+    host.plot(t, count_rate_target_2_fixed_30/dt, linestyle='none', marker='.', linewidth=0.2, ms=1, color='green', 
+             label='Alice, smoothed 30 bins = ' + repr(30*dt) + ' sec = 60 m [green]' )
+    
+    host.plot(t, count_rate_target_2_fixed_300/dt, linewidth=0.2, ms=0.1, color='blue', 
+             label='Alice, smoothed 300 bins = ' + repr(300*dt) + ' sec = 0.6 km [blue]')
+    
+    host.plot(t, count_rate_target_2_fixed_3000/dt, linewidth=0.3, ms=0.1, color='red', 
+             label='Alice, smoothed 3000 bins = ' + repr(3000*dt) + ' sec = 6 km [red]')
+    
+    host.plot(t, count_rate_target_2_fixed_30000/dt, linewidth=0.3, ms=0.1, color='yellow', 
+             label='Alice, smoothed 30000 bins = ' + repr(30000 * dt) + 
+             ' sec = 60 km [yellow]' )
+    
+    host.set_ylim((000,800))
+    
+    plt.xlim(hbt.mm(t))
+
+    plt.text(1000, 400, "HD 42153", fontsize=fs*1.4) 
+#    plt.title(sequence + ", HD 42153", fontsize=fs)
+    plt.ylabel('Counts/sec', fontsize=fs) # Fontsize is ignored here, probably because of the twin-axis thing...
+    plt.xlabel('Seconds since ' + utc_start)    
+    plt.legend(framealpha=0.8, loc = 'upper left', fontsize=fs*0.75)
+    plt.show()
+    
 #==============================================================================
 # Zoom in on one area of interest in OC2
 #==============================================================================
