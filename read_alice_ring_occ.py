@@ -82,7 +82,7 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=False):
 
     met_all = []               # A long array with a list of all of the timestamps, one per 4 ms (i.e., at 250 hz)
     count_rate_fits_all = []   # The count rate as read from the COUNT_RATE extension directly
-    count_rate_all = []        # Count rate computed from the PIXEL_LIST_TABLE. Should match that in COUNT_RATE extension
+    count_rate_all = []        # Count rate computed from the PIXEL_LIST_TABLE. Should match COUNT_RATE extension
     count_rate_target_all = [] # Count rate for the target only, extracted by spatially filtering the PIXEL_LIST_TABLE
  
     # O_RING_OC2, O_RING_OC3
@@ -173,7 +173,7 @@ def read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=False):
         count_rate_target  = np.array([item for sublist in count_rate_target_all for item in sublist]) 
         count_rate_target  = np.array(count_rate_target, dtype=float)					  
         
-        met         = np.array([item for sublist in met_all for item in sublist])   # Flatten the MET array from 2D to 1D
+        met         = np.array([item for sublist in met_all for item in sublist])  # Flatten the MET array from 2D to 1D
         met         = np.array(met, dtype=float)
     
     return (met, count_rate_target, count_rate, image_target_summed, image_summed)
@@ -378,9 +378,14 @@ count_rate_fake_3000 = hbt.smooth_boxcar(count_rate_fake, 3000)
 count_rate_fake_30000 = hbt.smooth_boxcar(count_rate_fake, 30000)
 count_rate_target_fake_30000 = hbt.smooth_boxcar(count_rate_target_fake, 30000)
 
-if (sequence == 'STAROCC1'):
+if (sequence == 'STAROCC1'): # Do statistics for second star in the aperture
     
+    count_rate_target_2_30000 = hbt.smooth_boxcar(count_rate_target_2, 30000)
     count_rate_target_2_3000 = hbt.smooth_boxcar(count_rate_target_2, 3000)
+    count_rate_target_2_300 = hbt.smooth_boxcar(count_rate_target_2, 300)
+    count_rate_target_2_30 = hbt.smooth_boxcar(count_rate_target_2, 30)
+    count_rate_target_2_5 = hbt.smooth_boxcar(count_rate_target_2, 5)
+    count_rate_target_2_3 = hbt.smooth_boxcar(count_rate_target_2, 3)
 
 ##########
 # Calculate statistics
@@ -562,8 +567,8 @@ if (sequence == 'STAROCC1'):
         ax1.set_ylabel('Counts/sec')
         ax1.set_title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + 
                   repr(int(dt * binning)) + ' sec', fontsize=fs)
-    #    ax2.plot(t, ang_target_limb*hbt.r2d, linestyle = 'dashed', label = 'Angular Distance from Pluto Limb, Star 1')
-    #    ax2.plot(t, ang_target_2_limb*hbt.r2d, linestyle = 'dashed', label = 'Angular Distance from Pluto Limb, Star 2')
+  #    ax2.plot(t, ang_target_limb*hbt.r2d, linestyle = 'dashed', label = 'Angular Distance from Pluto Limb, Star 1')
+  #    ax2.plot(t, ang_target_2_limb*hbt.r2d, linestyle = 'dashed', label = 'Angular Distance from Pluto Limb, Star 2')
     
         ax2.set_ylabel('Pluto-Star Separation [$r_P$]')
         ax1.legend(framealpha=0.8, loc='center left', fontsize=fs*0.7)
@@ -702,7 +707,7 @@ plt.colorbar()
 plt.show()
 
 ####################
-# Now do some testing to read in the housekeeping data. Randy says that the same data from the main FITS header should be
+# Now do some testing to read in the housekeeping data. Randy says the same data from the main FITS header should be
 # available here, but in 'analog' form rather than 'digital.'
 ####################
 
