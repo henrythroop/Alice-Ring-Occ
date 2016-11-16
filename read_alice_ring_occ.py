@@ -936,6 +936,8 @@ if ((sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3')):
 
 if (sequence == 'STAROCC1'):
 
+    # Plot first subplot, for star #1
+    
     fs = 18
     plt.rcParams['figure.figsize'] = 17,8
     hbt.set_fontsize(size=fs)
@@ -946,7 +948,6 @@ if (sequence == 'STAROCC1'):
     # Jump through some hoops to place a second x-axis here: et vs. radius_pluto
     
     host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
-#    par = host.twiny()                           # Set up the parasite axis
     plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
     offset = 50                                  # How far away from the main plot the parasite axis is.
     new_fixed_axis     = par.get_grid_helper().new_fixed_axis
@@ -971,26 +972,20 @@ if (sequence == 'STAROCC1'):
              label='Alice, smoothed 30000 bins = ' + repr(30000 * dt) + 
              ' sec = 100 km [yellow]' )
     
-    #host.set_ylim((2800,4000))
     host.set_ylim((500,1600))
     
     plt.xlim(hbt.mm(t))
-    #plt.xlim((1750,1850))
-#    par.set_xlim(hbt.mm(radius_bary))
-#    plt.title(sequence + ", HD 42545", fontsize=fs)
+
     plt.text(4500, 1500, "HD 42545", fontsize=fs*1.4) 
 
     plt.ylabel('Counts/sec', fontsize=fs) # Fontsize is ignored here, probably because of the twin-axis thing...
     plt.xlabel('Seconds since ' + utc_start, fontsize=fs)
-#    par.set_xlabel('Distance from Pluto barycenter [km]', fontsize=fs)
     
     plt.legend(framealpha=0.8, loc='lower left', fontsize=fs*0.75)
     plt.show()
 
 
-#
-
-
+########### Now plot second subplot, for Star #2
 
     v = 0.53  # km/sec, star 2
     host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
@@ -1023,7 +1018,6 @@ if (sequence == 'STAROCC1'):
     plt.xlim(hbt.mm(t))
 
     plt.text(1000, 400, "HD 42153", fontsize=fs*1.4) 
-#    plt.title(sequence + ", HD 42153", fontsize=fs)
     plt.ylabel('Counts/sec', fontsize=fs) # Fontsize is ignored here, probably because of the twin-axis thing...
     plt.xlabel('Seconds since ' + utc_start)    
     plt.legend(framealpha=0.8, loc = 'upper left', fontsize=fs*0.75)
