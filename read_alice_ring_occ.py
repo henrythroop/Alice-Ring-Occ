@@ -242,7 +242,6 @@ print("Reading...")
 (met, count_rate_target, count_rate, image_target_summed, image_summed) = \
   read_alice_occ_data(file_list, xlim, ylim, verbose=True, short=DO_ABBREVIATED)
 
-
 # If there are two stars, then also read count rate of second one.
 # Programmatically this is a bit inefficient since I read the entire dataset 
 # a second time. Function could be rewritten to extract two stars at once, 
@@ -252,6 +251,12 @@ if (sequence == 'STAROCC1'):
     print('Reading star 2...')
     (met, count_rate_target_2, count_rate_2, image_target_summed_2, image_summed) = \
         read_alice_occ_data(file_list, xlim, ylim_2, verbose=True, short=DO_ABBREVIATED)
+
+# Look up the sub-obs latitude. This is for the ring tilt angle. 
+# Do this for just the first timestep, since it doesn't change much during the scan.
+
+vec,lt = sp.spkezr('New Horizons', sp.utc2et(hbt.met2utc(met[0])), 'IAU_PLUTO', 'LT', 'Pluto')
+(junk,subobslon,subobslat) = sp.reclat(vec[0:3])    # Return sub-obs latitude (aka ring tilt angle), in radians
 
 dt = int((met[1] - met[0])*1000)/1000.          # Interval between consecutive samples
 
@@ -272,6 +277,7 @@ if (sequence == 'STAROCC1'): # Plot second target as well, if we have it
     plt.imshow(stretch(image_target_summed_2), aspect=10)
     plt.title(sequence + ', target #2')
     plt.show()
+
 
 # Now start the analysis
 
@@ -772,6 +778,8 @@ ax.ticklabel_format(useOffset=False)
 plt.ylabel('DN (smoothed x ' + repr(crop) + ')', fontsize=fs)
 plt.show()
 
+hbt.set_fontsize(12)
+
 if (sequence == 'STAROCC1'): # Made plot for first star above. Now do it for the second star
     plt.rcParams['figure.figsize'] = 16,8
     plt.subplot(1,2,1)
@@ -942,8 +950,10 @@ if (sequence == 'STAROCC1') and False:
     plt.rcParams['figure.figsize'] = 17,8
     hbt.set_fontsize(size=fs)
 
-
-    v = 0.79  # km/sec, star 1
+    # Do a very rough calculation of shadow velocity.
+    # We just take the total distance 
+    dist = (7 * r_pluto_km) - (2*r_pluto_km)     # From 7 RP to 2 RP
+    v    = dist / (np.amax(t) - np.amin(t))    # km/sec
         
     host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
     plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
@@ -952,26 +962,26 @@ if (sequence == 'STAROCC1') and False:
 
   
     p1, = host.plot(t, count_rate_target/dt, ms=0.1, linestyle='none', marker='.', color='orange', 
-             label = 'Alice, raw, ' + repr(dt) + ' sec = 3 m [orange]')
+             label = 'Raw, ' + repr(dt) + ' sec = {:.0f} m [orange]'.format(dt*v*1000))
     
     host.plot(t, count_rate_target_fixed_30/dt, linestyle='none', marker='.', linewidth=0.1, ms=1, color='green', 
-             label='Alice, smoothed 30 bins = ' + repr(30*dt) + ' sec = 100 m [green]' )
+             label='Smoothed 30 bins = ' + repr(30*dt) + ' sec = {:.0f} m [green]'.format(dt*v*30*1000) )
     
     host.plot(t, count_rate_target_fixed_300/dt, linewidth=0.1, ms=0.1, color='blue', 
-             label='Alice, smoothed 300 bins = ' + repr(300*dt) + ' sec = 1 km [blue]')
+             label='Smoothed 300 bins = ' + repr(300*dt) + ' sec = {:.0f} km [blue]'.format(dt*v*300))
     
     host.plot(t, count_rate_target_fixed_3000/dt, linewidth=0.3, ms=0.1, color='red', 
-             label='Alice, smoothed 3000 bins = ' + repr(3000*dt) + ' sec = 10 km [red]')
+             label='Smoothed 3000 bins = ' + repr(3000*dt) + ' sec = {:.0f} km [red]'.format(dt*v*3000))
     
     host.plot(t, count_rate_target_fixed_30000/dt, linewidth=0.2, ms=0.1, color='yellow', 
-             label='Alice, smoothed 30000 bins = ' + repr(30000 * dt) + 
-             ' sec = 100 km [yellow]' )
+             label='Smoothed 30000 bins = ' + repr(30000 * dt) + 
+             ' sec = {:.0f} km [yellow]'.format(dt*v*30000) )
     
     host.set_ylim((500,1600))
     
     plt.xlim(hbt.mm(t))
 
-    plt.text(4500, 1500, "HD 42545", fontsize=fs*1.4) 
+    plt.text(5000, 1525, "HD 42545", fontsize=fs*1.4) 
 
     plt.ylabel('Counts/sec', fontsize=fs) # Fontsize is ignored here, probably because of the twin-axis thing...
     plt.xlabel('Seconds since ' + utc_start, fontsize=fs)
@@ -982,31 +992,30 @@ if (sequence == 'STAROCC1') and False:
 
 ########### Now plot second subplot, for Star #2
 
-    v = 0.53  # km/sec, star 2
+    dist_2 = (5 * r_pluto_km) - (-1*r_pluto_km) # From -1 RP, to 5 RP
+    v_2 = dist_2 / (np.amax(t) - np.amin(t))    # km/sec
+
     host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
     plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
     offset = 50                                  # How far away from the main plot the parasite axis is.
     new_fixed_axis     = par.get_grid_helper().new_fixed_axis
-#    par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
-#                                        offset=(0,-offset))
-#    par.axis["bottom"].toggle(all=True)          # Make sure the bottom axis is displayed
-#    par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
+
     
     p1, = host.plot(t, count_rate_target_2/dt, ms=0.1, linestyle='none', marker='.', color='orange', 
-             label = 'Alice, raw, ' + repr(dt) + ' sec = 2 m [orange]')
+             label = 'Raw, ' + repr(dt) + ' sec = {:.0f} m [orange]'.format(dt*v_2*1000))
     
     host.plot(t, count_rate_target_2_fixed_30/dt, linestyle='none', marker='.', linewidth=0.2, ms=1, color='green', 
-             label='Alice, smoothed 30 bins = ' + repr(30*dt) + ' sec = 60 m [green]' )
+             label='Smoothed 30 bins = ' + repr(30*dt) + ' sec = {:.0f} m [green]'.format(dt*v_2*30*1000))
     
     host.plot(t, count_rate_target_2_fixed_300/dt, linewidth=0.2, ms=0.1, color='blue', 
-             label='Alice, smoothed 300 bins = ' + repr(300*dt) + ' sec = 0.6 km [blue]')
+             label='Smoothed 300 bins = ' + repr(300*dt) + ' sec = {:.0f} km [blue]'.format(dt*v_2*300))
     
     host.plot(t, count_rate_target_2_fixed_3000/dt, linewidth=0.3, ms=0.1, color='red', 
-             label='Alice, smoothed 3000 bins = ' + repr(3000*dt) + ' sec = 6 km [red]')
+             label='Smoothed 3000 bins = ' + repr(3000*dt) + ' sec = {:.0f} km [red]'.format(dt*v_2*3000))
     
     host.plot(t, count_rate_target_2_fixed_30000/dt, linewidth=0.3, ms=0.1, color='yellow', 
-             label='Alice, smoothed 30000 bins = ' + repr(30000 * dt) + 
-             ' sec = 60 km [yellow]' )
+             label='Smoothed 30000 bins = ' + repr(30000 * dt) + 
+             ' sec = {:.0f} km [yellow]'.format(dt*v_2*30000) )
     
     host.set_ylim((000,800))
     
@@ -1017,6 +1026,62 @@ if (sequence == 'STAROCC1') and False:
     plt.xlabel('Seconds since ' + utc_start)    
     plt.legend(framealpha=0.8, loc = 'upper left', fontsize=fs*0.75)
     plt.show()
+    
+########## Now make a data table for these data, for the final optical depth
+
+    x0 = 100000
+    x1 = 400000
+    
+    # Calculate the fractional 3-sigma variance from the mean.
+    # F = F0 * exp(-tau / cos(theta))
+    #   Where F0 is the unocculted flux, and F is the occulted.
+    #   I assume here that F = F0 - 3*stdev(F0)
+    #
+    # Solve this and it gives tau = -cos * ln(F/F0)
+    #   Where F = F_3S = F0 - 3*stdev(F0)
+    
+    # Star 1
+
+    f0 = np.mean(count_rate_target[x0:x1])
+    f_3s = f0 - 4 * np.std(count_rate_target_fixed[x0:x1])
+    f_3s_30 = f0 - 4 * np.std(count_rate_target_fixed_30[x0:x1])
+    f_3s_300 = f0 - 4 * np.std(count_rate_target_fixed_300[x0:x1])
+    f_3s_3000 = f0 - 4 * np.std(count_rate_target_fixed_3000[x0:x1])
+    f_3s_30000 = f0 - 4 * np.std(count_rate_target_fixed_30000[x0:x1])
+        
+    tau_norm = -np.cos(subobslat) * np.log(f_3s / f0)
+    tau_norm_30 = -np.cos(subobslat) * np.log(f_3s_30 / f0)
+    tau_norm_300 = -np.cos(subobslat) * np.log(f_3s_300 / f0)
+    tau_norm_3000 = -np.cos(subobslat) * np.log(f_3s_3000 / f0)
+    tau_norm_30000 = -np.cos(subobslat) * np.log(f_3s_30000 / f0)
+
+
+    # Star 2
+    x0_2 = 1500000
+    x1_2 = 2000000
+    
+    f0_2 = np.mean(count_rate_target_2[x0_2:x1_2])
+    f_3s_2 = f0_2 - 4 * np.std(count_rate_target_2_fixed[x0_2:x1_2])
+    f_3s_2_30 = f0_2 - 4 * np.std(count_rate_target_2_fixed_30[x0_2:x1_2])
+    f_3s_2_300 = f0_2 - 4 * np.std(count_rate_target_2_fixed_300[x0_2:x1_2])
+    f_3s_2_3000 = f0_2 - 4 * np.std(count_rate_target_2_fixed_3000[x0_2:x1_2])
+    f_3s_2_30000 = f0_2 - 4 * np.std(count_rate_target_2_fixed_30000[x0_2:x1_2])
+
+    tau_norm_2 = -np.cos(subobslat) * np.log(f_3s_2 / f0_2)
+    tau_norm_2_30 = -np.cos(subobslat) * np.log(f_3s_2_30 / f0_2)
+    tau_norm_2_300 = -np.cos(subobslat) * np.log(f_3s_2_300 / f0_2)
+    tau_norm_2_3000 = -np.cos(subobslat) * np.log(f_3s_2_3000 / f0_2)
+    tau_norm_2_30000 = -np.cos(subobslat) * np.log(f_3s_2_30000 / f0_2)
+
+    print("Star 1, Binning 30    = {:.3f} km, tau <= {:.3f}".format(dt*v*30, tau_norm_30))
+    print("Star 1, Binning 300   = {:.0f} km, tau <= {:.3f}".format(dt*v*300, tau_norm_300))
+    print("Star 1, Binning 3000  = {:.0f} km, tau <= {:.3f}".format(dt*v*3000, tau_norm_3000))
+    print("Star 1, Binning 30000 = {:.0f} km, tau <= {:.3f}".format(dt*v*30000, tau_norm_30000))
+    print("Star 2, Binning 30    = {:.3f} km, tau <= {:.3f}".format(dt*v_2*30, tau_norm_2_30))
+    print("Star 2, Binning 300   = {:.0f} km, tau <= {:.3f}".format(dt*v_2*300, tau_norm_2_300))
+    print("Star 2, Binning 3000  = {:.0f} km, tau <= {:.3f}".format(dt*v_2 * 3000, tau_norm_2_3000))
+    print("Star 2, Binning 30000 = {:.0f} km, tau <= {:.3f}".format(dt*v_2 * 30000, tau_norm_2_30000))
+    print("These are 4sigma values")
     
 #==============================================================================
 # Zoom in on one area of interest in OC2
