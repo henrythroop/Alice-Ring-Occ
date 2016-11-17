@@ -934,7 +934,7 @@ if ((sequence == 'O_RING_OC2') or (sequence == 'O_RING_OC3')):
     plt.legend()
     plt.show()
 
-if (sequence == 'STAROCC1'):
+if (sequence == 'STAROCC1') and False:
 
     # Plot first subplot, for star #1
     
@@ -944,18 +944,13 @@ if (sequence == 'STAROCC1'):
 
 
     v = 0.79  # km/sec, star 1
-    
-    # Jump through some hoops to place a second x-axis here: et vs. radius_pluto
-    
+        
     host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
     plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
     offset = 50                                  # How far away from the main plot the parasite axis is.
     new_fixed_axis     = par.get_grid_helper().new_fixed_axis
-    par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
-                                        offset=(0,-offset))
-    par.axis["bottom"].toggle(all=True)          # Make sure the bottom axis is displayed
-    par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
-    
+
+  
     p1, = host.plot(t, count_rate_target/dt, ms=0.1, linestyle='none', marker='.', color='orange', 
              label = 'Alice, raw, ' + repr(dt) + ' sec = 3 m [orange]')
     
@@ -992,10 +987,10 @@ if (sequence == 'STAROCC1'):
     plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
     offset = 50                                  # How far away from the main plot the parasite axis is.
     new_fixed_axis     = par.get_grid_helper().new_fixed_axis
-    par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
-                                        offset=(0,-offset))
-    par.axis["bottom"].toggle(all=True)          # Make sure the bottom axis is displayed
-    par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
+#    par.axis["bottom"] = new_fixed_axis(loc="bottom", axes=par,
+#                                        offset=(0,-offset))
+#    par.axis["bottom"].toggle(all=True)          # Make sure the bottom axis is displayed
+#    par.axis["top"].set_visible(False)           # Do not display the axis on *top* of the plot.
     
     p1, = host.plot(t, count_rate_target_2/dt, ms=0.1, linestyle='none', marker='.', color='orange', 
              label = 'Alice, raw, ' + repr(dt) + ' sec = 2 m [orange]')
