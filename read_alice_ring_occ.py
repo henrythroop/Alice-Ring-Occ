@@ -651,8 +651,8 @@ if (sequence == 'STAROCC1'):
         ax1.set_xlim(np.array(hbt.mm(t)))
 #        ax2.set_ylim([0.04, 5])
         ax1.set_ylim([-290, 1400])
-        ax1.text(1000, 1050, 'Star 1 (HD 42545)')
-        ax1.text(7000, 100,    'Star 2 (HD 43153)')
+        ax1.text(1000, 1050, 'HD 42545')
+        ax1.text(7000, 100,  'HD 43153')
         plt.show()
 
         # 
@@ -660,8 +660,9 @@ if (sequence == 'STAROCC1'):
         #
         
         # Plot 1 (Star 1)
-        vel = 6 * r_pluto_km / (np.amax(t) - np.amin(t)) # Velocity is not constant, but this is ballpark km/sec
- 
+        vel_star1 = 5 * r_pluto_km / (np.amax(t) - np.amin(t)) # Velocity is not constant, but this is ballpark km/sec
+        vel = vel_star1
+        
         hbt.figsize((15,3))
         
         fix, ax1 = plt.subplots()
@@ -676,7 +677,7 @@ if (sequence == 'STAROCC1'):
         ax1.set_title(sequence + ', dt = ' + repr(dt) + ' sec, smoothed x ' + repr(binning) + ' = ' + 
                   repr(int(dt * binning)) + ' sec', fontsize=fs)
     
-        ax1.text(100, 1110, 'HD 42545, v = {:4.2f} km/sec'.format(vel))
+        ax1.text(100, 1080, 'HD 42545, v = {:4.2f} km/sec'.format(vel))
         ax2.set_ylabel('Pluto-Star Separation [$r_P$]')
         ax1.legend(framealpha=0.8, loc='upper left', fontsize=fs*0.7)
         ax2.legend(framealpha=0.8, loc='lower right',fontsize=fs*0.7)
@@ -688,7 +689,8 @@ if (sequence == 'STAROCC1'):
 
         # Plot 2 (Star 2)
         
-        vel_2 = 4 * r_pluto_km / (np.amax(t) - np.amin(t)) # Velocity is not constant, but this is ballpark km/sec
+        vel_star2 = 6 * r_pluto_km / (np.amax(t) - np.amin(t)) # Velocity is not constant, but this is ballpark km/sec
+        vel_2 = vel_star2
         
         fix, ax1 = plt.subplots()
         ax2 = ax1.twinx()
@@ -952,9 +954,10 @@ if (sequence == 'STAROCC1') and False:
 
     # Do a very rough calculation of shadow velocity.
     # We just take the total distance 
-    dist = (7 * r_pluto_km) - (2*r_pluto_km)     # From 7 RP to 2 RP
-    v    = dist / (np.amax(t) - np.amin(t))    # km/sec
-        
+#    dist = (7 * r_pluto_km) - (2*r_pluto_km)     # From 7 RP to 2 RP
+#    v    = dist / (np.amax(t) - np.amin(t))    # km/sec
+    v = vel_star1
+    
     host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
     plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
     offset = 50                                  # How far away from the main plot the parasite axis is.
@@ -984,17 +987,20 @@ if (sequence == 'STAROCC1') and False:
     plt.text(5000, 1525, "HD 42545", fontsize=fs*1.4) 
 
     plt.ylabel('Counts/sec', fontsize=fs) # Fontsize is ignored here, probably because of the twin-axis thing...
-    plt.xlabel('Seconds since ' + utc_start, fontsize=fs)
+#    plt.xlabel('Seconds since ' + utc_start, fontsize=fs)
     
     plt.legend(framealpha=0.8, loc='lower left', fontsize=fs*0.75)
+    host.get_xaxis().set_ticks([]) # Do not print the x axis at all!
+
     plt.show()
 
 
 ########### Now plot second subplot, for Star #2
 
-    dist_2 = (5 * r_pluto_km) - (-1*r_pluto_km) # From -1 RP, to 5 RP
-    v_2 = dist_2 / (np.amax(t) - np.amin(t))    # km/sec
+#    dist_2 = (5 * r_pluto_km) - (-1*r_pluto_km) # From -1 RP, to 5 RP
+#    v_2 = dist_2 / (np.amax(t) - np.amin(t))    # km/sec
 
+    v_2 = vel_star2
     host = host_subplot(111, axes_class=AA.Axes) # Set up the host axis
     plt.subplots_adjust(bottom=0.2)              # Adjusts overall height of the whole plot in y direction 
     offset = 50                                  # How far away from the main plot the parasite axis is.
@@ -1067,16 +1073,17 @@ if (sequence == 'STAROCC1') and False:
     f_3s_2_3000 = f0_2 - 4 * np.std(count_rate_target_2_fixed_3000[x0_2:x1_2])
     f_3s_2_30000 = f0_2 - 4 * np.std(count_rate_target_2_fixed_30000[x0_2:x1_2])
 
-    tau_norm_2 = -np.cos(subobslat) * np.log(f_3s_2 / f0_2)
-    tau_norm_2_30 = -np.cos(subobslat) * np.log(f_3s_2_30 / f0_2)
-    tau_norm_2_300 = -np.cos(subobslat) * np.log(f_3s_2_300 / f0_2)
-    tau_norm_2_3000 = -np.cos(subobslat) * np.log(f_3s_2_3000 / f0_2)
+    tau_norm_2       = -np.cos(subobslat) * np.log(f_3s_2       / f0_2)
+    tau_norm_2_30    = -np.cos(subobslat) * np.log(f_3s_2_30    / f0_2)
+    tau_norm_2_300   = -np.cos(subobslat) * np.log(f_3s_2_300   / f0_2)
+    tau_norm_2_3000  = -np.cos(subobslat) * np.log(f_3s_2_3000  / f0_2)
     tau_norm_2_30000 = -np.cos(subobslat) * np.log(f_3s_2_30000 / f0_2)
 
     print("Star 1, Binning 30    = {:.3f} km, tau <= {:.3f}".format(dt*v*30, tau_norm_30))
     print("Star 1, Binning 300   = {:.0f} km, tau <= {:.3f}".format(dt*v*300, tau_norm_300))
     print("Star 1, Binning 3000  = {:.0f} km, tau <= {:.3f}".format(dt*v*3000, tau_norm_3000))
     print("Star 1, Binning 30000 = {:.0f} km, tau <= {:.3f}".format(dt*v*30000, tau_norm_30000))
+    
     print("Star 2, Binning 30    = {:.3f} km, tau <= {:.3f}".format(dt*v_2*30, tau_norm_2_30))
     print("Star 2, Binning 300   = {:.0f} km, tau <= {:.3f}".format(dt*v_2*300, tau_norm_2_300))
     print("Star 2, Binning 3000  = {:.0f} km, tau <= {:.3f}".format(dt*v_2 * 3000, tau_norm_2_3000))
